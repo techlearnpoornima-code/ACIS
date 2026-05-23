@@ -1,7 +1,7 @@
 # ACIS — Technical Reference
 
 **AI Competitive Intelligence System**  
-A 6-agent deterministic pipeline that analyses YouTube AI creator channels and produces a McKinsey-structured strategic brief with actionable content recommendations.
+A 6-agent pipeline — deterministic by default, LLM-powered via AgentScope — that analyses YouTube AI creator channels and produces a McKinsey-structured strategic brief with actionable content recommendations. Hermes Agent provides the persistent runtime: cross-session belief memory, FTS5 session search, cron scheduling, and multi-platform brief delivery.
 
 ---
 
@@ -28,6 +28,19 @@ A 6-agent deterministic pipeline that analyses YouTube AI creator channels and p
 7. [Configuration](#7-configuration)
 8. [CLI Reference](#8-cli-reference)
 9. [Database Schema](#9-database-schema)
+10. [AgentScope Integration](#10-agentscope-integration)
+    - [Why AgentScope?](#why-agentscope)
+    - [ReActAgent mode vs. deterministic pipeline](#reactagent-mode-vs-deterministic-pipeline)
+    - [Agent 1 toolkit](#agent-1-toolkit)
+    - [Agent 2 toolkit](#agent-2-toolkit)
+    - [Fallback behaviour](#fallback-behaviour)
+11. [Hermes Integration](#11-hermes-integration)
+    - [What Hermes provides](#what-hermes-provides)
+    - [Hermes bridge](#hermes-bridge-srcacishermes_bridgepy)
+    - [Agent wiring](#agent-wiring)
+    - [Skill packaging](#skill-packaging-skillsacisskillmd)
+    - [Docker deployment](#docker-deployment)
+    - [MCP server](#mcp-server-mcp_servepy)
 
 ---
 
@@ -1015,3 +1028,250 @@ uv run python run.py --agentscope                  # LLM agents for A1+A2
 | `prediction_outcomes` | Future | Tracks whether recommendations proved correct |
 
 **Deduplication:** On live runs, the pipeline loads all existing `video_id`s from the `videos` table before fetching from YouTube. Any already-ingested video is skipped and counted in `videos_skipped`. Use `--force-reprocess` to bypass this.
+
+---
+
+## 10. AgentScope Integration
+
+### Why AgentScope?
+
+The deterministic agents (Agents 1–3) follow fixed code paths: segment transcript, match regex patterns, score salience. This is fast and reproducible but cannot adapt to ambiguous transcripts or make judgment calls the programmer didn't anticipate.
+
+AgentScope's `ReActAgent` replaces Agents 1 and 2 with an LLM reasoning loop. The model is given the same toolkit functions the deterministic agents call internally, but it decides the order and parameters — and can supplement regex pattern matching with its own world knowledge (e.g. noticing a new tool name that doesn't yet match any pattern).
+
+**Activate with:** `python run.py --agentscope` (requires `ANTHROPIC_API_KEY` and `pip install 'acis[agents]'`)
+
+### ReActAgent mode vs. deterministic pipeline
+
+```
+Deterministic mode (default):
+  IngestionPayload → Channel Researcher (fixed code) → ChannelResearchNode
+  ChannelResearchNode → Topic Extractor (regex match) → SemanticGraphUpdate
+
+AgentScope mode (--agentscope):
+  IngestionPayload → ReActChannelResearchAgent (LLM + tools) → ChannelResearchNode
+  ChannelResearchNode → ReActTopicExtractorAgent (LLM + tools + own knowledge) → SemanticGraphUpdate
+```
+
+In both modes the output types are identical. Agents 3–6 always run deterministically regardless of mode.
+
+**The ReAct loop:**
+
+```
+User Msg (video payload JSON)
+  │
+  ▼
+LLM ── reasons ──▶ decides which tool to call
+  │
+  ├── tool call ──▶ tool executes ──▶ ToolResponse → back to LLM
+  ├── tool call ──▶ ...
+  └── finalise_research() / finalise_semantic_graph()   ← mandatory last call
+         │
+         ▼
+    _result dict written ──▶ ChannelResearchNode / SemanticGraphUpdate constructed
+```
+
+The loop runs for up to `max_iters` turns (8 for Agent 1, 12 for Agent 2). If the LLM does not call the finalise tool within the limit, the agent **falls back to the deterministic implementation** and prints a warning — the run always completes.
+
+### Agent 1 toolkit
+
+**File:** `src/acis/agents/agentscope.py` — `ReActChannelResearchAgent`  
+**Model:** `AnthropicChatModel` (`claude-sonnet-4-6`)  
+**Max iterations:** 8
+
+| Tool | What the LLM calls it for |
+|---|---|
+| `segment_transcript(segments_json, duration_seconds)` | Split transcript into hook / body / outro windows |
+| `detect_language(text)` | Get ISO 639-1 language code for the transcript |
+| `count_words(text)` | Total word count of full transcript |
+| `get_transcript_completeness(segments_json, duration_seconds)` | Fraction of video duration covered by captions |
+| `finalise_research(...)` | **Must be called last** — writes all values into `_result`; LLM provides completeness, language, word count, wpm, and all three window texts |
+
+The system prompt instructs the LLM to call tools in this exact order and pass real tool outputs into `finalise_research` — it must not fabricate values.
+
+### Agent 2 toolkit
+
+**File:** `src/acis/agents/agentscope.py` — `ReActTopicExtractorAgent`  
+**Model:** `AnthropicChatModel` (`claude-sonnet-4-6`)  
+**Max iterations:** 12 (more tool calls needed than Agent 1)
+
+| Tool | What the LLM calls it for |
+|---|---|
+| `extract_topics_by_pattern(research_node_json)` | Regex-match all 77 taxonomy topics against the video text |
+| `extract_monetisation_signals(text)` | Detect course plugs, consulting offers, retainer mentions |
+| `compute_topic_salience(research_node_json, topics_json)` | Score each topic: log-TF × coverage |
+| `compute_topic_tf(research_node_json, topics_json)` | Raw TF per topic for future IDF |
+| `build_topic_pairs(topics_json)` | Generate co-occurrence pairs across categories |
+| `finalise_semantic_graph(...)` | **Must be called last** — all category lists, scores, and pairs |
+
+**Key difference from Agent 1:** After `extract_topics_by_pattern`, the system prompt asks the LLM to review the hook/body/outro text directly and **add any topics it is confident about** that the regex missed. This is where the LLM's world knowledge fills gaps the static taxonomy doesn't cover — without hallucinating (the prompt instructs "only add topics genuinely present").
+
+### Fallback behaviour
+
+Both ReAct agents implement `_fallback()`:
+
+```python
+def _fallback(self, payload: IngestionPayload) -> ChannelResearchNode:
+    from acis.agents.channel_researcher import ChannelResearchAgent
+    return ChannelResearchAgent(agent_id=self.agent_id).run(payload)
+```
+
+If the LLM fails to call `finalise_*` within `max_iters`, or raises any exception, the fallback runs the standard deterministic agent on the same input and the pipeline continues. This guarantees the run always produces output.
+
+### Initialisation
+
+```python
+from acis.agents.agentscope import init_agentscope, ReActChannelResearchAgent, ReActTopicExtractorAgent
+
+model = init_agentscope(model_name="claude-sonnet-4-6", api_key="sk-ant-...")
+agent1 = ReActChannelResearchAgent(model=model)
+agent2 = ReActTopicExtractorAgent(model=model)
+```
+
+`init_agentscope()` calls `agentscope.init(project="acis")` and returns a shared `AnthropicChatModel` instance. Both agents share the same model object — AgentScope handles thread safety internally.
+
+---
+
+## 11. Hermes Integration
+
+### What Hermes provides
+
+Hermes Agent (NousResearch) is the **persistent runtime layer** that ACIS runs inside. It is not an orchestration framework — it is the environment agents live in between runs.
+
+| Hermes capability | How ACIS uses it |
+|---|---|
+| **Persistent MEMORY.md** | Strategic beliefs survive across runs via Bayesian confidence updates |
+| **FTS5 session search** | Agent 5 queries past run outputs: "was this gap previously identified?" |
+| **Cron scheduler** | ACIS runs automatically every Sunday at 08:00 — no cron infrastructure needed |
+| **Multi-platform gateway** | Strategic brief delivered to Telegram or CLI — no custom delivery code |
+| **Provider abstraction** | Switch LLM backend (Anthropic → OpenRouter → OpenAI) with `hermes model` |
+| **Skill system** | ACIS packaged as a named skill, callable from any Hermes gateway |
+
+Hermes runs as a Docker container (port 8765). When `HERMES_BASE_URL` is set, ACIS routes memory and search calls to the Hermes API. When it is unset, ACIS falls back to a local `output/memory.md` file — so the pipeline runs without Hermes in all development and sample-data scenarios.
+
+### Hermes bridge (`src/acis/hermes_bridge.py`)
+
+The bridge is the sole integration point between the ACIS Python codebase and the Hermes runtime. It exports three public symbols:
+
+**`BeliefDelta` dataclass**
+
+```python
+@dataclass
+class BeliefDelta:
+    statement: str           # human-readable belief statement
+    evidence_strength: float # ∈ [-1, 1]; positive = confirms, negative = contradicts
+    tags: list[str]          # e.g. ["white-space", "opportunity"]
+    half_life_days: int      # confidence decay speed (30 = fast, 90 = slow)
+```
+
+**`search_hermes_sessions(query: str) → list[dict]`**
+
+Calls `GET {HERMES_BASE_URL}/api/sessions/search?q={query}&limit=10`. Returns a list of matching session summaries from the Hermes FTS5 index — every past ACIS run output is indexed and searchable. Returns `[]` if Hermes is unreachable.
+
+**`update_hermes_memory(belief_deltas, *, memory_store=None) → str`**
+
+Calls `POST {HERMES_BASE_URL}/api/memory/update` with belief delta payloads. Hermes performs the Bayesian confidence update and writes to its persistent `MEMORY.md`. Falls back to `MemoryStore.update()` + local file write if Hermes is unreachable or `HERMES_BASE_URL` is unset. Returns a Markdown summary of what changed.
+
+**Routing logic:**
+
+```
+HERMES_BASE_URL set?
+  ├── yes → call Hermes HTTP API
+  │          ├── success → Hermes writes MEMORY.md, returns summary
+  │          └── error   → print warning, fall through to local fallback
+  └── no  → local MemoryStore (output/memory.md)
+```
+
+### Agent wiring
+
+**Agent 5 — Gap Detector** calls `search_hermes_sessions` per candidate opportunity before finalising the output:
+
+```python
+hermes_hits = search_hermes_sessions(f"gap opportunity {topic}")
+evidence = _build_evidence_chain(..., hermes_hits=hermes_hits)
+```
+
+The evidence chain reads:
+- `"Recurring gap: confirmed in N prior ACIS run(s) via Hermes FTS5"` — when past sessions match
+- `"First-time detection — no prior ACIS session confirms this gap"` — when no hits
+
+**Agent 6 — Synthesizer** collects `BeliefDelta` objects from all performance correlations and white-space opportunities, then calls `update_hermes_memory` once at end of run:
+
+```python
+belief_deltas = [
+    BeliefDelta(
+        statement="duration_bucket=10-15min correlates with >1.5x velocity on nick-saraev",
+        evidence_strength=0.60,
+        tags=["performance-correlation", "duration_bucket", "nick-saraev"],
+    ),
+    BeliefDelta(
+        statement="'Gemini' is a white-space opportunity (saturation 0.00)",
+        evidence_strength=0.25,
+        tags=["white-space", "opportunity"],
+        half_life_days=30,
+    ),
+]
+summary = update_hermes_memory(belief_deltas, memory_store=memory_store)
+```
+
+### Skill packaging (`skills/acis/skill.md`)
+
+ACIS is packaged as a Hermes skill, stored at `skills/acis/skill.md` and mounted into the Hermes container at `~/.hermes/skills/acis/skill.md`. This allows calling ACIS from any Hermes gateway using natural language:
+
+```
+"Run ACIS"                           → full run, all channels
+"Run ACIS delta"                     → incremental run, new videos only
+"Run ACIS for @liamottley"           → single channel run
+"Show ACIS beliefs"                  → display MEMORY.md belief graph
+"What did ACIS find about Claude Code?" → FTS5 search past outputs
+```
+
+**Cron schedule** defined in `skill.md`: `Every Sunday at 08:00. Deliver to Telegram.`  
+No custom scheduler code is required — Hermes interprets the natural language schedule and triggers the skill at the configured time.
+
+### Docker deployment
+
+`docker-compose.yml` brings up two services:
+
+```yaml
+hermes:        # NousResearch Hermes Agent — port 8765
+  volumes:
+    - ./skills/acis → mounted as the ACIS skill
+    - ./output      → mounted as Hermes session index (makes run outputs searchable via FTS5)
+
+postgres:      # PostgreSQL 16 — port 5432
+  volumes:
+    - ./migrations → auto-applied on first container start
+```
+
+**Single-command start:**
+```bash
+cp .env.example .env    # fill in YOUTUBE_API_KEY, ANTHROPIC_API_KEY, POSTGRES_PASSWORD
+docker compose up -d
+```
+
+Set `HERMES_BASE_URL=http://localhost:8765` in `.env` to enable the bridge.
+
+### MCP server (`mcp_serve.py`)
+
+The MCP server exposes ACIS tools as callable endpoints for the Hermes agent loop to invoke directly — Hermes can plan its own sequence of tool calls without going through `run.py`.
+
+```bash
+uv run python mcp_serve.py   # starts on 0.0.0.0:8766 by default
+```
+
+Registered tools:
+
+| Tool | Purpose |
+|---|---|
+| `segment_transcript` | Split transcript into hook / body / outro |
+| `detect_language` | ISO language detection |
+| `validate_transcript_completeness` | Coverage fraction |
+| `extract_topics` | Regex taxonomy match |
+| `compute_salience` | log-TF × coverage score |
+| `compute_tf` | Raw TF per topic |
+| `detect_emergent_topics` | Auto-discover tool-like names not in taxonomy |
+| `search_hermes_sessions` | FTS5 past-run search (Hermes bridge) |
+| `update_hermes_memory` | Write beliefs to MEMORY.md (Hermes bridge) |
+
+Override host/port with `MCP_HOST` and `MCP_PORT` env vars.
