@@ -1,0 +1,598 @@
+{
+  "channels": [
+    {
+      "channel_id": "liam-ottley",
+      "handle": "@liamottley",
+      "display_name": "Liam Ottley",
+      "videos": [
+        {
+          "video_id": "liam-001",
+          "title": "I built an AI agency system that closes clients on autopilot",
+          "description": "Breaking down the automation agency stack and the tools behind it.",
+          "upload_date": "2026-05-18",
+          "duration_seconds": 840,
+          "view_count": 48200,
+          "like_count": 3100,
+          "comment_count": 420,
+          "thumbnail_url": "https://example.com/liam-001.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 18, "text": "If you want to build an automation agency that actually gets clients, this workflow matters."},
+            {"start": 18, "duration": 26, "text": "I am going to show the exact Claude and n8n stack we use to generate leads, book calls, and deliver support."},
+            {"start": 44, "duration": 110, "text": "The body of the system starts with lead generation, CRM sync, and a multi agent routing layer."},
+            {"start": 154, "duration": 160, "text": "We use MCP compatible tools, Airtable, Claude Code, and a simple RAG layer for client context."},
+            {"start": 314, "duration": 180, "text": "The monetisation model is a monthly retainer plus setup fee, and I mention our accelerator course briefly."},
+            {"start": 494, "duration": 190, "text": "What makes this work is positioning the offer as operational leverage instead of generic AI automation."},
+            {"start": 684, "duration": 156, "text": "If you want the templates, I linked them below together with the course and a done for you implementation option."}
+          ]
+        },
+        {
+          "video_id": "liam-002",
+          "title": "Claude Code for agency builders: the workflow nobody shows",
+          "description": "Technical breakdown of using Claude Code in service delivery.",
+          "upload_date": "2026-05-16",
+          "duration_seconds": 780,
+          "view_count": 28100,
+          "like_count": 2100,
+          "comment_count": 301,
+          "thumbnail_url": "https://example.com/liam-002.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 30, "text": "Most creators show flashy demos, but almost nobody shows how Claude Code fits into an actual client workflow."},
+            {"start": 30, "duration": 30, "text": "This is the technical authority version with code review, deployment, and prompt management."},
+            {"start": 60, "duration": 240, "text": "We walk through repositories, MCP servers, n8n triggers, and agent handoffs for customer support."},
+            {"start": 300, "duration": 220, "text": "I also compare this stack with LangChain and explain when a simple Python script is enough."},
+            {"start": 520, "duration": 260, "text": "The video closes with a brief mention of the agency playbook and a call to action for consulting."}
+          ]
+        },
+        {
+          "video_id": "liam-003",
+          "title": "How to price AI automation for business clients in 2026",
+          "description": "Pricing frameworks, retainer models, and value-based selling for AI agencies.",
+          "upload_date": "2026-05-13",
+          "duration_seconds": 720,
+          "view_count": 22400,
+          "like_count": 1780,
+          "comment_count": 245,
+          "thumbnail_url": "https://example.com/liam-003.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 25, "text": "Pricing AI automation is one of the most common questions I get, so here is the full breakdown."},
+            {"start": 25, "duration": 35, "text": "Most agency owners undercharge because they price on time instead of on outcomes."},
+            {"start": 60, "duration": 200, "text": "I cover three models: project fee, monthly retainer, and productised service with a setup phase."},
+            {"start": 260, "duration": 220, "text": "The consulting positioning section explains how to anchor value to revenue impact rather than hourly cost."},
+            {"start": 480, "duration": 240, "text": "I close with a breakdown of our course pricing and how the community adds recurring revenue."}
+          ]
+        },
+        {
+          "video_id": "liam-004",
+          "title": "Building a sales agent with GPT-4o and n8n",
+          "description": "Step-by-step tutorial for a GPT-4 powered outbound sales automation.",
+          "upload_date": "2026-05-10",
+          "duration_seconds": 960,
+          "view_count": 31500,
+          "like_count": 2450,
+          "comment_count": 380,
+          "thumbnail_url": "https://example.com/liam-004.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 20, "text": "Today I am building a full sales automation agent using GPT-4o and n8n, live on screen."},
+            {"start": 20, "duration": 40, "text": "This agent handles cold email personalisation, follow-up scheduling, and CRM updates automatically."},
+            {"start": 60, "duration": 300, "text": "The core workflow connects OpenAI, Airtable, and a Zapier webhook to trigger outreach sequences."},
+            {"start": 360, "duration": 300, "text": "I walk through prompt engineering for tone, RAG for company research, and error handling in n8n."},
+            {"start": 660, "duration": 300, "text": "The outro shows the dashboard reporting view and mentions a done-for-you agency service option."}
+          ]
+        },
+        {
+          "video_id": "liam-005",
+          "title": "The MCP server setup every AI agency needs",
+          "description": "How to configure and host MCP servers for client-facing AI systems.",
+          "upload_date": "2026-05-07",
+          "duration_seconds": 840,
+          "view_count": 18900,
+          "like_count": 1560,
+          "comment_count": 212,
+          "thumbnail_url": "https://example.com/liam-005.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 22, "text": "MCP servers are becoming the standard interface for AI tools, and your agency needs to understand them."},
+            {"start": 22, "duration": 38, "text": "I am going to show the full stack: MCP host, Claude, and a Python backend connected to Airtable."},
+            {"start": 60, "duration": 280, "text": "The body covers server setup, tool registration, authentication, and connecting to existing CRM workflows."},
+            {"start": 340, "duration": 260, "text": "I compare MCP with LangChain tool use and explain why MCP is the better long-term bet for multi-agent systems."},
+            {"start": 600, "duration": 240, "text": "Closing section covers our accelerator cohort and a consulting offer for teams wanting a white-glove setup."}
+          ]
+        },
+        {
+          "video_id": "liam-006",
+          "title": "Why your AI agency is not scaling (and how to fix it)",
+          "description": "Common scaling bottlenecks and operational fixes for AI service businesses.",
+          "upload_date": "2026-05-04",
+          "duration_seconds": 690,
+          "view_count": 16200,
+          "like_count": 1340,
+          "comment_count": 187,
+          "thumbnail_url": "https://example.com/liam-006.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 20, "text": "If your AI agency is stuck at the same revenue month after month, this is the video for you."},
+            {"start": 20, "duration": 40, "text": "The three bottlenecks I see most are delivery, sales, and positioning — and they compound."},
+            {"start": 60, "duration": 220, "text": "I walk through how to productise your service, automate delivery with n8n, and delegate with SOPs."},
+            {"start": 280, "duration": 220, "text": "The retainer model section shows how to move clients from one-off projects to recurring revenue structures."},
+            {"start": 500, "duration": 190, "text": "I close with the community and course offer and an invitation to book a consulting call."}
+          ]
+        },
+        {
+          "video_id": "liam-007",
+          "title": "Cursor vs Claude Code for agency client work",
+          "description": "Head-to-head comparison for AI coding tools in a service delivery context.",
+          "upload_date": "2026-04-30",
+          "duration_seconds": 780,
+          "view_count": 25600,
+          "like_count": 2080,
+          "comment_count": 298,
+          "thumbnail_url": "https://example.com/liam-007.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 28, "text": "I have spent three months using both Cursor and Claude Code for client delivery work, so here is my honest take."},
+            {"start": 28, "duration": 32, "text": "The short answer is that they are different tools for different workflow stages, not a direct swap."},
+            {"start": 60, "duration": 260, "text": "Cursor wins on IDE integration and in-file editing speed, while Claude Code shines in multi-file orchestration and agentic tasks."},
+            {"start": 320, "duration": 240, "text": "I show a real client project where I switched between them and explain the handoff points."},
+            {"start": 560, "duration": 220, "text": "The video ends with my recommended stack and a mention of the agency playbook course."}
+          ]
+        },
+        {
+          "video_id": "liam-008",
+          "title": "RAG pipelines for client knowledge bases: a practical guide",
+          "description": "Building retrieval-augmented generation systems for agency client use cases.",
+          "upload_date": "2026-04-26",
+          "duration_seconds": 900,
+          "view_count": 14800,
+          "like_count": 1190,
+          "comment_count": 163,
+          "thumbnail_url": "https://example.com/liam-008.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 25, "text": "RAG is not just a buzzword anymore. It is a real delivery component in most of the agency projects I run."},
+            {"start": 25, "duration": 35, "text": "Today I build a complete RAG pipeline using Python, Supabase, and the Anthropic API."},
+            {"start": 60, "duration": 280, "text": "I cover chunking strategies, embedding models, vector retrieval, and how to combine this with a Claude chat interface."},
+            {"start": 340, "duration": 300, "text": "The observability section shows how to log retrieval results and evaluation scores so you can tune the system over time."},
+            {"start": 640, "duration": 260, "text": "I end with a note on Pinecone versus Supabase vector and a discount code for the agency course."}
+          ]
+        },
+        {
+          "video_id": "liam-009",
+          "title": "How I close high-ticket AI automation clients",
+          "description": "Sales call framework, objection handling, and closing strategies for AI agencies.",
+          "upload_date": "2026-04-22",
+          "duration_seconds": 750,
+          "view_count": 20100,
+          "like_count": 1690,
+          "comment_count": 231,
+          "thumbnail_url": "https://example.com/liam-009.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 22, "text": "Closing a five thousand dollar plus AI automation deal is different from closing a cheap website project."},
+            {"start": 22, "duration": 38, "text": "In this video I walk through the exact discovery call framework we use to qualify and close high-ticket clients."},
+            {"start": 60, "duration": 240, "text": "The framework covers pain identification, ROI framing, and building trust through a technical walkthrough."},
+            {"start": 300, "duration": 220, "text": "I also cover cold email outreach sequences and how to use CRM automation to follow up without sounding like a bot."},
+            {"start": 520, "duration": 230, "text": "I close with a note on the consulting offer and a link to the community for ongoing sales support."}
+          ]
+        },
+        {
+          "video_id": "liam-010",
+          "title": "Multi-agent orchestration with LangGraph and Claude",
+          "description": "Building a LangGraph-based multi-agent system for complex automation tasks.",
+          "upload_date": "2026-04-18",
+          "duration_seconds": 1020,
+          "view_count": 29300,
+          "like_count": 2390,
+          "comment_count": 334,
+          "thumbnail_url": "https://example.com/liam-010.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 25, "text": "Multi-agent orchestration is where AI automation goes from demo to real product, and LangGraph is my tool of choice."},
+            {"start": 25, "duration": 35, "text": "Today I build a full multi-agent system with Claude, LangGraph, and a Python backend, all connected to Airtable."},
+            {"start": 60, "duration": 320, "text": "I cover graph construction, agent routing, state management, and how to handle handoffs between specialised agents."},
+            {"start": 380, "duration": 320, "text": "The observability section shows how to instrument agent calls with structured logging and evaluation hooks."},
+            {"start": 700, "duration": 320, "text": "I end with performance benchmarks comparing this LangGraph setup to a simpler n8n workflow, then mention the cohort."}
+          ]
+        }
+      ]
+    },
+    {
+      "channel_id": "nick-saraev",
+      "handle": "@nicksaraev",
+      "display_name": "Nick Saraev",
+      "videos": [
+        {
+          "video_id": "nick-001",
+          "title": "n8n + MCP is the agent stack I would use if starting over",
+          "description": "Practical build for local-first AI workflows.",
+          "upload_date": "2026-05-17",
+          "duration_seconds": 900,
+          "view_count": 35500,
+          "like_count": 2870,
+          "comment_count": 355,
+          "thumbnail_url": "https://example.com/nick-001.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 20, "text": "If I had to restart my entire AI workflow stack, I would begin with n8n, MCP, and a boring database."},
+            {"start": 20, "duration": 35, "text": "You do not need a huge framework to ship useful agent systems for customer support or lead gen."},
+            {"start": 55, "duration": 200, "text": "The workflow starts with ingestion, routing, and small Python services rather than abstract orchestration."},
+            {"start": 255, "duration": 250, "text": "Then we layer in evaluation, benchmark design, and observability using structured outputs."},
+            {"start": 505, "duration": 210, "text": "I mention community templates and a paid cohort at the end, but the main point is architecture tradeoffs."},
+            {"start": 715, "duration": 185, "text": "The closing section covers agent reliability, test harnesses, and what breaks in real deployments."}
+          ]
+        },
+        {
+          "video_id": "nick-002",
+          "title": "Why most AI agent tutorials fail in production",
+          "description": "Critique of overfit demos and missing evaluation loops.",
+          "upload_date": "2026-05-14",
+          "duration_seconds": 720,
+          "view_count": 19800,
+          "like_count": 1640,
+          "comment_count": 221,
+          "thumbnail_url": "https://example.com/nick-002.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 25, "text": "Most AI agent tutorials fail because they optimise for a screenshot, not reliability."},
+            {"start": 25, "duration": 35, "text": "This is anti corporate only in the sense that big claims hide bad engineering."},
+            {"start": 60, "duration": 260, "text": "I break down evals, retries, prompt versioning, and why benchmark design matters."},
+            {"start": 320, "duration": 220, "text": "There is also a section on agent memory, retrieval, and when a workflow should stay deterministic."},
+            {"start": 540, "duration": 180, "text": "The outro points to a workshop and a code repository with templates."}
+          ]
+        },
+        {
+          "video_id": "nick-003",
+          "title": "The evaluation framework I use for every AI agent I ship",
+          "description": "How to build systematic evals for production AI agents.",
+          "upload_date": "2026-05-11",
+          "duration_seconds": 840,
+          "view_count": 27400,
+          "like_count": 2210,
+          "comment_count": 289,
+          "thumbnail_url": "https://example.com/nick-003.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 22, "text": "Evaluation is the thing separating hobbyist AI projects from production systems, and most people skip it."},
+            {"start": 22, "duration": 38, "text": "I am going to walk through the exact evaluation framework I apply before shipping any AI agent to a client."},
+            {"start": 60, "duration": 270, "text": "The framework has three layers: unit tests for tools, integration tests for agent pipelines, and benchmark comparisons."},
+            {"start": 330, "duration": 270, "text": "I show how to log agent traces, score outputs with an LLM judge, and track regression across deployments."},
+            {"start": 600, "duration": 240, "text": "I end with a note on using GPT-4o as an automated evaluator and links to the community templates."}
+          ]
+        },
+        {
+          "video_id": "nick-004",
+          "title": "Building reliable Python agents without LangChain",
+          "description": "Raw Python patterns for building durable AI agents without heavy frameworks.",
+          "upload_date": "2026-05-08",
+          "duration_seconds": 960,
+          "view_count": 23100,
+          "like_count": 1920,
+          "comment_count": 267,
+          "thumbnail_url": "https://example.com/nick-004.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 24, "text": "I stopped using LangChain for most projects about a year ago, and my code got significantly simpler."},
+            {"start": 24, "duration": 36, "text": "Today I build a complete agent loop in raw Python with retries, structured outputs, and tool use via Anthropic."},
+            {"start": 60, "duration": 300, "text": "The core pattern is a simple run loop with typed Pydantic models, error boundaries, and a state machine."},
+            {"start": 360, "duration": 300, "text": "I add observability with structured logging, a SQLite trace store, and a minimal benchmark harness."},
+            {"start": 660, "duration": 300, "text": "The outro includes links to the open-source template repo and an invite to the workshop."}
+          ]
+        },
+        {
+          "video_id": "nick-005",
+          "title": "Observability for AI agents: what to log and why",
+          "description": "Practical guide to logging, tracing, and monitoring production AI agents.",
+          "upload_date": "2026-05-05",
+          "duration_seconds": 780,
+          "view_count": 17600,
+          "like_count": 1450,
+          "comment_count": 198,
+          "thumbnail_url": "https://example.com/nick-005.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 20, "text": "Observability for AI agents is an unsolved problem that most tutorials completely ignore."},
+            {"start": 20, "duration": 40, "text": "By the end of this video you will have a logging schema and a trace viewer you can actually use."},
+            {"start": 60, "duration": 250, "text": "I cover what to log at each agent step, how to structure traces in JSON, and how to correlate across runs."},
+            {"start": 310, "duration": 250, "text": "The evaluation section shows how to feed trace data into an automated benchmark to catch regressions."},
+            {"start": 560, "duration": 220, "text": "I close with a note on cost tracking per agent call and a link to the community Slack."}
+          ]
+        },
+        {
+          "video_id": "nick-006",
+          "title": "Prompt versioning and testing in a team environment",
+          "description": "Git-based prompt management, regression testing, and team collaboration patterns.",
+          "upload_date": "2026-05-02",
+          "duration_seconds": 720,
+          "view_count": 14200,
+          "like_count": 1180,
+          "comment_count": 156,
+          "thumbnail_url": "https://example.com/nick-006.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 22, "text": "Prompt engineering without versioning is just guessing. Let me show you how to do it properly in a team."},
+            {"start": 22, "duration": 38, "text": "The pattern I use is a simple YAML prompt registry with Git history and automated evaluation on every commit."},
+            {"start": 60, "duration": 230, "text": "I cover the registry schema, a Python test harness that runs against Claude and GPT-4o, and CI integration."},
+            {"start": 290, "duration": 230, "text": "The benchmark section shows how to detect prompt regressions before they reach production."},
+            {"start": 520, "duration": 200, "text": "The outro links to the open-source repo and a workshop on advanced prompt engineering."}
+          ]
+        },
+        {
+          "video_id": "nick-007",
+          "title": "Voice agents in 2026: architecture and pitfalls",
+          "description": "Building reliable voice AI agents with speech-to-text, LLM, and TTS pipelines.",
+          "upload_date": "2026-04-28",
+          "duration_seconds": 900,
+          "view_count": 21800,
+          "like_count": 1790,
+          "comment_count": 243,
+          "thumbnail_url": "https://example.com/nick-007.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 25, "text": "Voice agents are the next wave after text, and the architecture problems are completely different."},
+            {"start": 25, "duration": 35, "text": "I am going to cover the full voice agent pipeline from STT to LLM to TTS with real latency numbers."},
+            {"start": 60, "duration": 280, "text": "The core challenge is latency: STT adds 300ms, the LLM adds 800ms, and TTS adds another 400ms."},
+            {"start": 340, "duration": 280, "text": "I show how to use streaming, parallel processing, and caching to get end-to-end latency under 1.5 seconds."},
+            {"start": 620, "duration": 280, "text": "The closing section covers evaluation for voice agents and a community thread on real deployment failures."}
+          ]
+        },
+        {
+          "video_id": "nick-008",
+          "title": "Designing agent memory that actually works",
+          "description": "Practical patterns for short-term, episodic, and semantic memory in AI agents.",
+          "upload_date": "2026-04-25",
+          "duration_seconds": 840,
+          "view_count": 18900,
+          "like_count": 1560,
+          "comment_count": 212,
+          "thumbnail_url": "https://example.com/nick-008.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 22, "text": "Agent memory is one of the most misunderstood components in the AI agent stack."},
+            {"start": 22, "duration": 38, "text": "Today I break down three memory types: short-term context, episodic storage, and semantic retrieval, with code."},
+            {"start": 60, "duration": 260, "text": "I build a working memory module in Python using a sliding context window, a SQLite episode store, and RAG."},
+            {"start": 320, "duration": 260, "text": "The retrieval section shows how to combine Pinecone vector search with keyword filters for precision."},
+            {"start": 580, "duration": 260, "text": "I end with benchmarks comparing memory configurations and a link to the open-source agent starter kit."}
+          ]
+        },
+        {
+          "video_id": "nick-009",
+          "title": "When to use CrewAI versus raw Python agents",
+          "description": "Framework trade-offs for multi-agent systems in production.",
+          "upload_date": "2026-04-22",
+          "duration_seconds": 720,
+          "view_count": 24500,
+          "like_count": 2010,
+          "comment_count": 278,
+          "thumbnail_url": "https://example.com/nick-009.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 20, "text": "Everyone asks me whether to use CrewAI or just write their own agents. Here is my honest breakdown."},
+            {"start": 20, "duration": 40, "text": "The answer depends on team size, iteration speed, and how much you care about observability and testing."},
+            {"start": 60, "duration": 220, "text": "CrewAI gives you fast prototyping and built-in role definitions, but the abstractions get in the way at scale."},
+            {"start": 280, "duration": 220, "text": "Raw Python agents are harder to start but easier to instrument, test, and maintain in a production environment."},
+            {"start": 500, "duration": 220, "text": "I close with a decision tree and a note on the community discussion thread about framework choices."}
+          ]
+        },
+        {
+          "video_id": "nick-010",
+          "title": "Fine-tuning small models for specialised agent tasks",
+          "description": "When and how to fine-tune open-source LLMs for reliable agent tool use.",
+          "upload_date": "2026-04-18",
+          "duration_seconds": 1020,
+          "view_count": 31200,
+          "like_count": 2560,
+          "comment_count": 347,
+          "thumbnail_url": "https://example.com/nick-010.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 25, "text": "Fine-tuning is back on the table now that small open-source models are good enough for specialised agent tasks."},
+            {"start": 25, "duration": 35, "text": "Today I walk through a complete fine-tuning run: data curation, training, evaluation, and production deployment."},
+            {"start": 60, "duration": 320, "text": "I use a 7B model with QLoRA, curated tool-call examples, and a custom benchmark to measure improvement."},
+            {"start": 380, "duration": 320, "text": "The evaluation section compares the fine-tuned model against GPT-4o on structured output tasks and tool routing."},
+            {"start": 700, "duration": 320, "text": "I end with cost analysis showing when fine-tuning beats API calls and a link to the training dataset on GitHub."}
+          ]
+        }
+      ]
+    },
+    {
+      "channel_id": "alex-finn",
+      "handle": "@alexfinn",
+      "display_name": "Alex Finn",
+      "videos": [
+        {
+          "video_id": "alex-001",
+          "title": "How I would sell AI lead generation in 2026",
+          "description": "Positioning, hooks, and outreach strategy for AI service offers.",
+          "upload_date": "2026-05-19",
+          "duration_seconds": 810,
+          "view_count": 44100,
+          "like_count": 2990,
+          "comment_count": 338,
+          "thumbnail_url": "https://example.com/alex-001.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 22, "text": "If I had to build an AI lead generation offer again, I would focus on positioning before tools."},
+            {"start": 22, "duration": 38, "text": "This market is saturated with vague automation promises, so your hook has to target a real pain."},
+            {"start": 60, "duration": 220, "text": "The body covers outreach, targeting, cold email systems, and CRM follow up with automation."},
+            {"start": 280, "duration": 250, "text": "I compare agency, productised service, and course models with examples of where creators get stuck."},
+            {"start": 530, "duration": 280, "text": "The close includes a consulting plug and a note on using AI demos carefully in sales calls."}
+          ]
+        },
+        {
+          "video_id": "alex-002",
+          "title": "The white-space AI offer almost nobody is making",
+          "description": "Opportunity hunting in AI services.",
+          "upload_date": "2026-05-12",
+          "duration_seconds": 690,
+          "view_count": 26300,
+          "like_count": 1875,
+          "comment_count": 207,
+          "thumbnail_url": "https://example.com/alex-002.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 28, "text": "Everyone talks about generic AI automation, but almost nobody targets evaluation workflows for service businesses."},
+            {"start": 28, "duration": 32, "text": "That gap matters because trust, QA, and reporting are where buyers actually feel pain."},
+            {"start": 60, "duration": 210, "text": "I cover niche selection, reporting dashboards, and recurring revenue positioning."},
+            {"start": 270, "duration": 210, "text": "There is a section on benchmark reports, reliability audits, and packaging the service offer."},
+            {"start": 480, "duration": 210, "text": "The outro references a paid community and a lead magnet."}
+          ]
+        },
+        {
+          "video_id": "alex-003",
+          "title": "Cold email for AI services: what is actually working in 2026",
+          "description": "Real data on cold email performance for AI automation agencies.",
+          "upload_date": "2026-05-09",
+          "duration_seconds": 750,
+          "view_count": 32700,
+          "like_count": 2540,
+          "comment_count": 311,
+          "thumbnail_url": "https://example.com/alex-003.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 24, "text": "Cold email open rates have dropped by 40 percent in two years, so the old playbook is broken."},
+            {"start": 24, "duration": 36, "text": "I am going to share what is actually working for AI automation agencies based on data from our community."},
+            {"start": 60, "duration": 240, "text": "The key changes are hyper-specific hooks, shorter copy, and proof-of-concept attachments instead of decks."},
+            {"start": 300, "duration": 230, "text": "I walk through an outreach sequence using n8n and a GPT-4o personalisation layer for scale."},
+            {"start": 530, "duration": 220, "text": "The outro includes templates you can use and a note on the consulting engagement for done-for-you outreach."}
+          ]
+        },
+        {
+          "video_id": "alex-004",
+          "title": "AI content creation workflows for small teams",
+          "description": "How to use AI tools to build a scalable content production pipeline.",
+          "upload_date": "2026-05-06",
+          "duration_seconds": 810,
+          "view_count": 19400,
+          "like_count": 1580,
+          "comment_count": 204,
+          "thumbnail_url": "https://example.com/alex-004.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 20, "text": "A two-person team can now produce the content volume of a ten-person team with the right AI workflow."},
+            {"start": 20, "duration": 40, "text": "I am going to show the exact content creation pipeline we use for our newsletter and YouTube channel."},
+            {"start": 60, "duration": 260, "text": "The workflow uses Claude for research and drafts, Perplexity for fact-checking, and n8n for distribution."},
+            {"start": 320, "duration": 260, "text": "I cover repurposing from long-form to short clips, social posts, and email sequences automatically."},
+            {"start": 580, "duration": 230, "text": "I close with a note on the newsletter monetisation model and an offer for the content workflow course."}
+          ]
+        },
+        {
+          "video_id": "alex-005",
+          "title": "How to position yourself as an AI specialist (not a generalist)",
+          "description": "Niche positioning strategy for AI consultants and agency owners.",
+          "upload_date": "2026-05-03",
+          "duration_seconds": 660,
+          "view_count": 28900,
+          "like_count": 2290,
+          "comment_count": 283,
+          "thumbnail_url": "https://example.com/alex-005.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 22, "text": "The biggest mistake I see AI consultants make is trying to serve every industry with every tool."},
+            {"start": 22, "duration": 38, "text": "Positioning as a specialist triples your close rate and doubles what you can charge, and I have the data."},
+            {"start": 60, "duration": 200, "text": "I walk through three positioning frameworks: vertical niche, use-case niche, and tool-stack specialisation."},
+            {"start": 260, "duration": 200, "text": "The case study section shows a before and after of repositioning from generic to specialist and the revenue impact."},
+            {"start": 460, "duration": 200, "text": "I close with a worksheet and an offer for a positioning sprint consulting call."}
+          ]
+        },
+        {
+          "video_id": "alex-006",
+          "title": "Using Zapier and Make for client automation without code",
+          "description": "No-code automation tools for AI service delivery.",
+          "upload_date": "2026-04-30",
+          "duration_seconds": 780,
+          "view_count": 16800,
+          "like_count": 1380,
+          "comment_count": 182,
+          "thumbnail_url": "https://example.com/alex-006.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 25, "text": "Not every client needs a custom code solution. Zapier and Make handle 70 percent of real automation needs."},
+            {"start": 25, "duration": 35, "text": "I am going to compare these two platforms and show when each is the right choice for an AI service offering."},
+            {"start": 60, "duration": 250, "text": "I build three live automations: CRM lead routing, Slack notifications, and a reporting dashboard trigger."},
+            {"start": 310, "duration": 240, "text": "The pricing section covers how to position these as retainer services rather than one-off project builds."},
+            {"start": 550, "duration": 230, "text": "I end with a comparison table and a plug for the productised service workshop."}
+          ]
+        },
+        {
+          "video_id": "alex-007",
+          "title": "The AI sales funnel that generated 50 leads in 30 days",
+          "description": "Step-by-step breakdown of an AI-powered inbound lead generation funnel.",
+          "upload_date": "2026-04-27",
+          "duration_seconds": 870,
+          "view_count": 41200,
+          "like_count": 3190,
+          "comment_count": 407,
+          "thumbnail_url": "https://example.com/alex-007.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 22, "text": "This funnel generated 50 qualified leads in 30 days for a B2B AI automation offer, and I am showing everything."},
+            {"start": 22, "duration": 38, "text": "The system combines content creation, email nurture, and an AI chatbot qualification layer."},
+            {"start": 60, "duration": 270, "text": "I walk through the lead magnet, the email sequence, and the chatbot built with n8n and Claude."},
+            {"start": 330, "duration": 270, "text": "The analytics section shows open rates, click rates, and conversion at each stage of the funnel."},
+            {"start": 600, "duration": 270, "text": "I close with a teardown of what I would change and an offer for a done-for-you funnel build."}
+          ]
+        },
+        {
+          "video_id": "alex-008",
+          "title": "Building an AI customer support system for small businesses",
+          "description": "Practical guide to deploying AI customer support with escalation and handoffs.",
+          "upload_date": "2026-04-24",
+          "duration_seconds": 900,
+          "view_count": 22600,
+          "like_count": 1840,
+          "comment_count": 247,
+          "thumbnail_url": "https://example.com/alex-008.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 25, "text": "AI customer support is one of the most in-demand services I get asked to build for small business clients."},
+            {"start": 25, "duration": 35, "text": "I am going to build a complete system with Claude, n8n, and a human escalation pathway, live on screen."},
+            {"start": 60, "duration": 280, "text": "The build covers intent classification, RAG for knowledge base retrieval, and tone matching to brand guidelines."},
+            {"start": 340, "duration": 280, "text": "I add a dashboard for monitoring unresolved tickets and a Slack alert when confidence drops below threshold."},
+            {"start": 620, "duration": 280, "text": "The outro includes a retainer pricing template and an offer for a live build workshop."}
+          ]
+        },
+        {
+          "video_id": "alex-009",
+          "title": "Why vibe coding is a business model, not just a trend",
+          "description": "How to productise AI-assisted code generation as a service.",
+          "upload_date": "2026-04-21",
+          "duration_seconds": 720,
+          "view_count": 36800,
+          "like_count": 2920,
+          "comment_count": 368,
+          "thumbnail_url": "https://example.com/alex-009.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 22, "text": "Vibe coding is getting dismissed as a toy by developers, but as a business model it is genuinely interesting."},
+            {"start": 22, "duration": 38, "text": "I am going to make the case that code generation as a service is a real productised offer with strong margins."},
+            {"start": 60, "duration": 220, "text": "The offer structure covers rapid MVP builds, iteration retainers, and a SaaS model for recurring revenue."},
+            {"start": 280, "duration": 220, "text": "I show examples of clients paying for code generation workflows using Cursor, Claude Code, and GitHub Copilot."},
+            {"start": 500, "duration": 220, "text": "I close with an analysis of the positioning risk and a note on the course for non-technical founders."}
+          ]
+        },
+        {
+          "video_id": "alex-010",
+          "title": "Data extraction and scraping as an AI service offer",
+          "description": "How to package AI-powered data extraction as a recurring service for clients.",
+          "upload_date": "2026-04-17",
+          "duration_seconds": 780,
+          "view_count": 18300,
+          "like_count": 1490,
+          "comment_count": 201,
+          "thumbnail_url": "https://example.com/alex-010.jpg",
+          "transcript_source": "api",
+          "transcript_segments": [
+            {"start": 0, "duration": 24, "text": "Data extraction is one of the highest ROI services you can offer because every business needs structured data."},
+            {"start": 24, "duration": 36, "text": "I am going to walk through how to package AI-powered scraping and extraction as a monthly retainer service."},
+            {"start": 60, "duration": 240, "text": "The tech stack covers Python, Claude for extraction, and n8n for scheduling and delivery to client dashboards."},
+            {"start": 300, "duration": 240, "text": "The business model section covers pricing based on data volume and the reporting dashboard add-on for upsells."},
+            {"start": 540, "duration": 240, "text": "I close with legal considerations around scraping and an offer for the data services consulting sprint."}
+          ]
+        }
+      ]
+    }
+  ]
+}

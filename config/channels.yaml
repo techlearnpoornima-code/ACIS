@@ -1,0 +1,11 @@
+default_video_limit: 10
+channels:
+  - channel_id: liam-ottley
+    handle: "@liamottley"
+    display_name: "Liam Ottley"
+  - channel_id: nick-saraev
+    handle: "@nicksaraev"
+    display_name: "Nick Saraev"
+  - channel_id: alex-finn
+    handle: "@alexfinn"
+    display_name: "Alex Finn"

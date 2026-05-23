@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acis"
+version = "0.1.0"
+description = "Autonomous Creator Intelligence System - Phase 1"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "ACIS" }]
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+# pip install "acis[live]"  — enables real YouTube ingestion + PostgreSQL persistence
+live = [
+    "google-api-python-client>=2.0",
+    "youtube-transcript-api>=0.6",
+    "yt-dlp>=2024.0",
+    "sqlalchemy>=2.0",
+    "psycopg2-binary>=2.9",
+    "python-dotenv>=1.0",
+    "langdetect>=1.0",
+    "requests>=2.31",
+]
+
+# pip install "acis[agents]"  — enables AgentScope ReActAgent mode (requires ANTHROPIC_API_KEY)
+agents = [
+    "agentscope>=1.0,<2.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

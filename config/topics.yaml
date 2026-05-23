@@ -1,0 +1,201 @@
+# ACIS Topic Taxonomy
+#
+# Add new tools/frameworks/use-cases here — no code change required.
+# Each entry: TopicName: [list of regex patterns matched against lowercase video text]
+# Use single quotes around patterns so backslashes are preserved literally.
+# Patterns are tested with re.search(), so partial matches work fine.
+#
+# Example — adding a new tool:
+#   NewTool:
+#     - '\bnew tool\b'
+#     - '\bnewt\b'
+
+technical_tools:
+  Claude:
+    - '\bclaude\b'
+  Claude Code:
+    - '\bclaude code\b'
+  GPT-4:
+    - '\bgpt-?4o?\b'
+    - '\bgpt4\b'
+  Gemini:
+    - '\bgemini\b'
+  Cursor:
+    - '\bcursor\b(?! key)'
+  Windsurf:
+    - '\bwindsurf\b'
+  GitHub Copilot:
+    - '\bcopilot\b'
+    - '\bgithub copilot\b'
+  n8n:
+    - '\bn8n\b'
+  Zapier:
+    - '\bzapier\b'
+  Make:
+    - '\bmake\.com\b'
+    - '\bintegromat\b'
+    - '\bmake automation\b'
+  LangChain:
+    - '\blangchain\b'
+  LangGraph:
+    - '\blanggraph\b'
+  CrewAI:
+    - '\bcrewai\b'
+  AutoGen:
+    - '\bautogen\b'
+  Dify:
+    - '\bdify\b'
+  Airtable:
+    - '\bairtable\b'
+  Supabase:
+    - '\bsupabase\b'
+  Pinecone:
+    - '\bpinecone\b'
+  Weaviate:
+    - '\bweaviate\b'
+  MCP:
+    - '\bmcp\b'
+  Python:
+    - '\bpython\b'
+  CRM:
+    - '\bcrm\b'
+  RAG:
+    - '\brag\b'
+  OpenAI:
+    - '\bopenai\b'
+  Anthropic:
+    - '\banthropic\b'
+  Perplexity:
+    - '\bperplexity\b'
+  OpenRouter:
+    - '\bopenrouter\b'
+  Groq:
+    - '\bgroq\b'
+  Mistral:
+    - '\bmistral\b'
+  Llama:
+    - '\bllama\b'
+  DeepSeek:
+    - '\bdeepseek\b'
+  Manus:
+    - '\bmanus\b(?! script)'
+  Devin:
+    - '\bdevin\b'
+  Replit:
+    - '\breplit\b'
+  Bolt:
+    - '\bbolt\.new\b'
+    - '\bbolt ai\b'
+  Lovable:
+    - '\blovable\b'
+  v0:
+    - '\bv0\b'
+    - '\bvercel v0\b'
+  Notion:
+    - '\bnotion\b'
+  Linear:
+    - '\blinear\b(?! regression)'
+  Slack:
+    - '\bslack\b'
+  Docker:
+    - '\bdocker\b'
+  Postgres:
+    - '\bpostgres\b'
+    - '\bpostgresql\b'
+
+architectures:
+  multi-agent:
+    - '\bmulti agent\b'
+    - '\bmulti-agent\b'
+  agentic:
+    - '\bagentic\b'
+  routing:
+    - '\brouting\b'
+  orchestration:
+    - '\borchestration\b'
+  observability:
+    - '\bobservability\b'
+  evaluation:
+    - '\bevals?\b'
+    - '\bevaluation\b'
+    - '\bbenchmark\b'
+  retrieval:
+    - '\bretrieval\b'
+  fine-tuning:
+    - '\bfine-?tuning\b'
+    - '\bfine tuned?\b'
+  voice agents:
+    - '\bvoice agent\b'
+    - '\bspeech agent\b'
+  computer use:
+    - '\bcomputer use\b'
+  prompt engineering:
+    - '\bprompt engineering\b'
+    - '\bprompt design\b'
+  context window:
+    - '\bcontext window\b'
+    - '\blong context\b'
+  tool calling:
+    - '\btool call(?:ing)?\b'
+    - '\bfunction call(?:ing)?\b'
+  memory:
+    - '\bagent memory\b'
+    - '\blong.term memory\b'
+
+use_cases:
+  lead generation:
+    - '\blead gen(?:eration)?\b'
+  customer support:
+    - '\bcustomer support\b'
+  sales automation:
+    - '\bsales automation\b'
+  reliability audits:
+    - '\breliability audits?\b'
+  reporting:
+    - '\breporting\b'
+    - '\bdashboards?\b'
+  outreach:
+    - '\boutreach\b'
+    - '\bcold email\b'
+  code generation:
+    - '\bcode gen(?:eration)?\b'
+    - '\bvibe coding\b'
+  content creation:
+    - '\bcontent creation\b'
+    - '\bcontent workflow\b'
+  data extraction:
+    - '\bdata extract(?:ion)?\b'
+    - '\bscraping\b'
+  document processing:
+    - '\bdocument processing\b'
+    - '\bpdf\s+(?:parsing|extraction|agent)\b'
+  research automation:
+    - '\bresearch automation\b'
+    - '\bdeep research\b'
+  coding assistant:
+    - '\bcoding assistant\b'
+    - '\bai coding\b'
+
+business_models:
+  agency:
+    - '\bagency\b'
+  course:
+    - '\bcourse\b'
+    - '\bcohort\b'
+    - '\bcommunity\b'
+    - '\bworkshop\b'
+  consulting:
+    - '\bconsulting\b'
+  productised service:
+    - '\bproductised service\b'
+    - '\bproductized service\b'
+  retainer:
+    - '\bretainer\b'
+  SaaS:
+    - '\bsaas\b'
+  newsletter:
+    - '\bnewsletter\b'
+  bootcamp:
+    - '\bbootcamp\b'
+  open source:
+    - '\bopen.source\b'
