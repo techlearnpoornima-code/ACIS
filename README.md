@@ -63,7 +63,7 @@ flowchart TD
     subgraph Output["Outputs"]
         JSON["output/latest_run.json"]
         BRIEF["output/strategic_brief.md"]
-        MEM["output/memory.md\nBayesian belief store"]
+        MEM["output/memory.md\nHermes MEMORY.md format\nBayesian belief store"]
     end
 
     YT --> YTAPI --> SVC
@@ -92,6 +92,7 @@ flowchart TD
 | **Language detection** | `langdetect` | Transcript language identification |
 | **Database** | PostgreSQL · SQLAlchemy · psycopg2-binary | Video persistence, run history, deduplication |
 | **HTTP** | `requests` | Thumbnail downloads |
+| **Belief store** | Hermes MEMORY.md format | Structured `### BELIEF-xxx` block format for persistent cross-run beliefs — implemented natively, no Hermes package required |
 | **Environment** | `python-dotenv` | `.env` loading for API keys |
 
 ---
