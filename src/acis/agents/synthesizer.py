@@ -4,6 +4,7 @@ import statistics
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from acis.hermes_bridge import BeliefDelta, update_hermes_memory
 from acis.models import (
     OpportunityVector,
     PerformanceScoringMatrix,
@@ -269,47 +270,38 @@ def _update_beliefs(
     opportunity_vector: OpportunityVector,
     memory_store: object | None,
 ) -> str:
-    if memory_store is None:
-        return "_Memory store not configured — belief graph not updated._\n"
+    """Collect belief deltas from this run and write them via the Hermes bridge.
 
-    from acis.memory import MemoryStore  # noqa: PLC0415
-    if not isinstance(memory_store, MemoryStore):
-        return "_Memory store type mismatch — belief graph not updated._\n"
-
-    memory_store.decay_all()
-    updated_ids: list[str] = []
+    Routes to the Hermes API when HERMES_BASE_URL is set; falls back to local MEMORY.md otherwise.
+    """
+    belief_deltas: list[BeliefDelta] = []
 
     for matrix in perf_matrices.values():
         for corr in matrix.correlations:
             if corr.significant and corr.mean_multiplier > 1.2:
-                statement = (
-                    f"{corr.attribute} correlates with "
-                    f">{corr.mean_multiplier:.1f}x velocity on {matrix.channel_id}"
-                )
                 strength = _STRONG_EVIDENCE if corr.mean_multiplier > 2.0 else _WEAK_EVIDENCE
-                b = memory_store.update(
-                    statement=statement,
+                belief_deltas.append(BeliefDelta(
+                    statement=(
+                        f"{corr.attribute} correlates with "
+                        f">{corr.mean_multiplier:.1f}x velocity on {matrix.channel_id}"
+                    ),
                     evidence_strength=strength,
                     tags=["performance-correlation", corr.attribute.split("=")[0], matrix.channel_id],
-                )
-                updated_ids.append(b.belief_id)
+                ))
 
     for opp in opportunity_vector.opportunities:
         if opp.confidence >= 0.55:
-            statement = (
-                f"'{opp.topic}' is a white-space opportunity "
-                f"(saturation {opp.saturation_score:.2f})"
-            )
-            b = memory_store.update(
-                statement=statement,
+            belief_deltas.append(BeliefDelta(
+                statement=(
+                    f"'{opp.topic}' is a white-space opportunity "
+                    f"(saturation {opp.saturation_score:.2f})"
+                ),
                 evidence_strength=_WEAK_EVIDENCE,
                 tags=["white-space", "opportunity"],
                 half_life_days=30,
-            )
-            updated_ids.append(b.belief_id)
+            ))
 
-    memory_store.save()
-    return memory_store.format_delta_summary(updated_ids)
+    return update_hermes_memory(belief_deltas, memory_store=memory_store)
 
 
 # ---------------------------------------------------------------------------

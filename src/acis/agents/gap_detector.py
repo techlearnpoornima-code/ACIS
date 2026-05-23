@@ -3,6 +3,7 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass
 
+from acis.hermes_bridge import search_hermes_sessions
 from acis.models import OpportunityItem, OpportunityVector, VideoPipelineResult
 from acis.tools import TOPIC_PATTERNS
 
@@ -99,6 +100,7 @@ def _build_evidence_chain(
     total_channels: int,
     adjacent: list[str],
     channel_topics: dict[str, dict[str, list[float]]],
+    hermes_hits: list[dict] | None = None,
 ) -> list[str]:
     """Produce a 2–4-item evidence list for an opportunity."""
     evidence: list[str] = []
@@ -115,7 +117,12 @@ def _build_evidence_chain(
     mean_sal = _mean_salience_across_channels(topic, channel_topics)
     if mean_sal > 0:
         evidence.append(f"Mean salience across covering channels: {mean_sal:.4f}")
-    evidence.append("No prior ACIS identification of this gap (first-run baseline)")
+    if hermes_hits:
+        evidence.append(
+            f"Recurring gap: confirmed in {len(hermes_hits)} prior ACIS run(s) via Hermes FTS5"
+        )
+    else:
+        evidence.append("First-time detection — no prior ACIS session confirms this gap")
     return evidence
 
 
@@ -184,9 +191,11 @@ class GapDetectorAgent:
             if confidence < _MIN_CONFIDENCE:
                 continue
 
+            hermes_hits = search_hermes_sessions(f"gap opportunity {topic}")
             evidence = _build_evidence_chain(
                 topic, saturation, covering_channels,
                 total_channels, adjacent, channel_topics,
+                hermes_hits=hermes_hits,
             )
             candidates.append(OpportunityItem(
                 topic=topic,

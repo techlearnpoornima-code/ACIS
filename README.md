@@ -41,6 +41,13 @@ flowchart TD
         SVC["IngestionService\ndeduplication · rate-limiting"]
     end
 
+    subgraph Hermes["Hermes Agent  ·  NousResearch  ·  port 8765"]
+        HM["Persistent MEMORY.md\nBayesian belief store"]
+        FTS["FTS5 Session Search\npast run recall"]
+        CRON["Cron Scheduler\nEvery Sunday 08:00"]
+        GW["Gateway Delivery\nTelegram · CLI"]
+    end
+
     subgraph LLM["LLM Layer  ·  AgentScope"]
         CLAUDE["Anthropic Claude API\nclaude-sonnet-4-6"]
         AS["AgentScope ReActAgent"]
@@ -73,10 +80,13 @@ flowchart TD
     SVC --> A1 --> A2 --> A3 --> A4 --> A5 --> A6
     YAML --> A2
     PG -- deduplication --> SVC
+    A5 -- search_hermes_sessions --> FTS
+    A6 -- update_hermes_memory --> HM
     A6 --> JSON
     A6 --> BRIEF
-    A6 --> MEM
+    A6 --> GW
     A6 --> PG
+    CRON --> SVC
 ```
 
 ### Layer breakdown
@@ -92,7 +102,10 @@ flowchart TD
 | **Language detection** | `langdetect` | Transcript language identification |
 | **Database** | PostgreSQL · SQLAlchemy · psycopg2-binary | Video persistence, run history, deduplication |
 | **HTTP** | `requests` | Thumbnail downloads |
-| **Belief store** | Hermes MEMORY.md format | Structured `### BELIEF-xxx` block format for persistent cross-run beliefs — implemented natively, no Hermes package required |
+| **Agent runtime** | Hermes Agent (NousResearch) | Persistent MEMORY.md belief store, FTS5 session search, cron scheduling, multi-platform delivery (Telegram/CLI) |
+| **Hermes bridge** | `src/acis/hermes_bridge.py` | `search_hermes_sessions()` (Agent 5) + `update_hermes_memory()` (Agent 6); falls back to local MEMORY.md when `HERMES_BASE_URL` is unset |
+| **Hermes skill** | `skills/acis/skill.md` | ACIS packaged as a callable Hermes skill: "Run ACIS", "Show ACIS beliefs", scheduled weekly |
+| **MCP server** | `mcp_serve.py` | Exposes ingestion + bridge tools as MCP endpoints for Hermes to invoke directly |
 | **Environment** | `python-dotenv` | `.env` loading for API keys |
 
 ---
