@@ -25,6 +25,77 @@ YouTube API / Sample Data
 
 ---
 
+## Tech stack
+
+### Architecture diagram
+
+```mermaid
+flowchart TD
+    subgraph Sources["Data Sources"]
+        YT["YouTube Data API v3\ngoogle-api-python-client"]
+        SAMPLE["Sample JSON\n(bundled, no key needed)"]
+    end
+
+    subgraph Ingestion["Ingestion Layer"]
+        YTAPI["youtube-transcript-api\nauto-captions"]
+        SVC["IngestionService\ndeduplication · rate-limiting"]
+    end
+
+    subgraph LLM["LLM Layer  ·  AgentScope"]
+        CLAUDE["Anthropic Claude API\nclaude-sonnet-4-6"]
+        AS["AgentScope ReActAgent"]
+    end
+
+    subgraph Pipeline["Agent Pipeline  ·  Python 3.11"]
+        A1["Agent 1\nChannel Researcher\ntranscript segmentation"]
+        A2["Agent 2\nTopic Extractor\nYAML taxonomy · emergent detection"]
+        A3["Agent 3\nHook Analyzer\nhype score · income claims"]
+        A4["Agent 4\nPerformance Correlator\nvelocity · Mann-Whitney U"]
+        A5["Agent 5\nGap Detector\nwhite-space analysis"]
+        A6["Agent 6\nSynthesizer\nMcKinsey SCR brief"]
+    end
+
+    subgraph Storage["Storage & Config"]
+        PG[("PostgreSQL\nSQLAlchemy · psycopg2")]
+        YAML["config/topics.yaml\nPyYAML · 77 topics"]
+    end
+
+    subgraph Output["Outputs"]
+        JSON["output/latest_run.json"]
+        BRIEF["output/strategic_brief.md"]
+        MEM["output/memory.md\nBayesian belief store"]
+    end
+
+    YT --> YTAPI --> SVC
+    SAMPLE --> SVC
+    CLAUDE --> AS --> A1
+    AS --> A2
+    SVC --> A1 --> A2 --> A3 --> A4 --> A5 --> A6
+    YAML --> A2
+    PG -- deduplication --> SVC
+    A6 --> JSON
+    A6 --> BRIEF
+    A6 --> MEM
+    A6 --> PG
+```
+
+### Layer breakdown
+
+| Layer | Technology | Role |
+|---|---|---|
+| **Language** | Python 3.11+ · [uv](https://github.com/astral-sh/uv) | Runtime and package management |
+| **YouTube ingestion** | `google-api-python-client` | Search, video details, comments via Data API v3 |
+| **Transcript fetching** | `youtube-transcript-api` | Auto-generated caption retrieval with configurable rate-limiting |
+| **LLM agents** | AgentScope · Anthropic Claude API | ReActAgent loop for Agents 1–2 (`--agentscope` mode, `claude-sonnet-4-6`) |
+| **NLP / analysis** | Python `re` · `math` · `collections` | Regex topic matching, TF scoring, hype score, Mann-Whitney U |
+| **Config / taxonomy** | PyYAML | YAML-driven topic taxonomy — add tools without touching code |
+| **Language detection** | `langdetect` | Transcript language identification |
+| **Database** | PostgreSQL · SQLAlchemy · psycopg2-binary | Video persistence, run history, deduplication |
+| **HTTP** | `requests` | Thumbnail downloads |
+| **Environment** | `python-dotenv` | `.env` loading for API keys |
+
+---
+
 ## Quick start
 
 ### 1. Install
