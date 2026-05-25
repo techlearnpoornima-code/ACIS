@@ -81,11 +81,15 @@ _HARDCODED_TOPIC_PATTERNS: dict[str, dict[str, list[str]]] = {
 }
 
 
+def _topics_yaml_path() -> Path:
+    return Path(__file__).resolve().parent.parent.parent / "config" / "topics.yaml"
+
+
 def _load_topic_patterns() -> dict[str, dict[str, list[str]]]:
     """Load taxonomy from config/topics.yaml; falls back to hardcoded dict if unavailable."""
     try:
         import yaml  # noqa: PLC0415 — optional dep, imported lazily
-        path = Path(__file__).resolve().parent.parent.parent / "config" / "topics.yaml"
+        path = _topics_yaml_path()
         if path.exists():
             with open(path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
@@ -135,6 +139,62 @@ _EMERGENT_EXCLUSIONS: frozenset[str] = frozenset({
 })
 
 
+_YAML_HEADER = """\
+# ACIS Topic Taxonomy
+#
+# Add new tools/frameworks/use-cases here — no code change required.
+# Each entry: TopicName: [list of regex patterns matched against lowercase video text]
+# Use single quotes around patterns so backslashes are preserved literally.
+# Patterns are tested with re.search(), so partial matches work fine.
+#
+# (The 'emergent' section is auto-populated by detect_emergent_topics.)
+"""
+
+
+def _append_emergent_to_yaml(new_topics: list[str]) -> None:
+    """Write newly detected tool names into config/topics.yaml under 'emergent', then reload globals."""
+    try:
+        import yaml  # noqa: PLC0415
+    except ImportError:
+        return
+
+    path = _topics_yaml_path()
+    if not path.exists():
+        return
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        if not isinstance(data, dict):
+            return
+
+        emergent_section: dict[str, list[str]] = data.setdefault("emergent", {})
+        added: list[str] = []
+        for topic in new_topics:
+            if topic not in emergent_section:
+                pattern = rf"\b{re.escape(topic.lower())}\b"
+                emergent_section[topic] = [pattern]
+                added.append(topic)
+
+        if not added:
+            return
+
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(_YAML_HEADER)
+            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+        global TOPIC_PATTERNS, _KNOWN_TOPICS_FLAT  # noqa: PLW0603
+        TOPIC_PATTERNS = _load_topic_patterns()
+        _KNOWN_TOPICS_FLAT = frozenset(
+            t.lower()
+            for category_topics in TOPIC_PATTERNS.values()
+            for t in category_topics
+        )
+        print(f"  ✓ Emergent topics added to config/topics.yaml: {added}")
+    except Exception as exc:
+        print(f"  ⚠ Could not update config/topics.yaml with emergent topics ({exc})")
+
+
 def _is_tool_like(word: str) -> bool:
     """Heuristic: return True for CamelCase, ALL-CAPS acronyms, or digit-suffixed names."""
     if len(word) < 2:
@@ -171,6 +231,10 @@ def detect_emergent_topics(node: ChannelResearchNode) -> list[str]:
             emergent.append(word)
         if len(emergent) >= 5:
             break
+
+    if emergent:
+        _append_emergent_to_yaml(emergent)
+
     return emergent
 
 
