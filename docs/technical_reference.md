@@ -205,7 +205,7 @@ The current taxonomy covers **77 topics** across the 4 categories.
 
 #### Emergent topic detection
 
-In addition to the fixed taxonomy, Agent 2 calls `detect_emergent_topics()` to automatically surface **new tool-like names** that appear in the video but are not yet in `topics.yaml`. This catches genuinely new frameworks and models before they are manually added.
+In addition to the fixed taxonomy, Agent 2 calls `detect_emergent_topics()` to automatically surface **new tool-like names** that appear in the video but are not yet in `topics.yaml`. This catches genuinely new frameworks and models before they are manually added — and **writes them back to `config/topics.yaml` immediately** so they are tracked as first-class topics on the next run.
 
 **How it works (in `src/acis/tools.py`):**
 
@@ -220,8 +220,20 @@ In addition to the fixed taxonomy, Agent 2 calls `detect_emergent_topics()` to a
    - Letter + digit suffix with an uppercase start (`GPT4`, `Llama3`)
    - OR: appeared in the title **and** was mentioned at least twice anywhere in the video
 5. Return the top 5 most-frequent candidates.
+6. **Persist to `config/topics.yaml`** — calls `_append_emergent_to_yaml()`, which writes each new name into an `emergent` category with an auto-generated word-boundary pattern, then reloads `TOPIC_PATTERNS` and `_KNOWN_TOPICS_FLAT` in-process so later videos in the same run won't re-detect the same terms.
 
-**Example:** A video discussing `QLoRA` fine-tuning before "QLoRA" was in the taxonomy would surface it as an emergent topic — it passes CamelCase detection and is not in the exclusion list.
+**Auto-generated entry format:**
+```yaml
+emergent:
+  QLoRA:
+    - '\bqlora\b'
+  Composio:
+    - '\bcomposio\b'
+```
+
+Entries in `emergent` are picked up by `extract_topics()` on subsequent runs just like any manually added tool. Move an entry to `technical_tools` (and add richer patterns) once you have confirmed it is worth curating.
+
+**Example:** A video discussing `QLoRA` fine-tuning before "QLoRA" was in the taxonomy would surface it as an emergent topic — it passes CamelCase detection, is not in the exclusion list, and gets written to the YAML automatically.
 
 **Downstream use of emergent topics:**
 - **Agent 5 — Gap Detector:** Includes emergent topics in the full topic pool when computing per-channel coverage, and assigns them to the `"emerging"` category in the gap analysis.
@@ -243,13 +255,13 @@ SemanticGraphUpdate(
     },
     tf_scores={"Claude": 0.0182, "n8n": 0.0091, "agency": 0.0072, "course": 0.0038},
     topic_pairs=[("Claude", "n8n"), ("Claude", "agency"), ("n8n", "agency")],
-    emergent_topics=["QLoRA", "Composio", "AgentOps"],  # auto-detected, not yet in YAML
+    emergent_topics=["QLoRA", "Composio", "AgentOps"],  # auto-detected; written to topics.yaml
 )
 ```
 
 `topic_pairs` records which topics co-occurred in the same video — this builds up a graph of which concepts are discussed together across the corpus.
 
-`emergent_topics` are auto-detected tool-like names not in the taxonomy. Promote them to `config/topics.yaml` once you've confirmed they're worth tracking permanently.
+`emergent_topics` lists auto-detected tool-like names that were new this run. They are written to `config/topics.yaml` under the `emergent` category during the run — no manual step needed to start tracking them.
 
 ---
 
@@ -855,7 +867,7 @@ monetisation_refs: list[dict]    # course plugs, community links detected in out
 salience_scores: dict[str, float]
 tf_scores: dict[str, float]      # raw TF per topic (for future IDF computation)
 topic_pairs: list[tuple[str,str]]# co-occurrence edges for graph analysis
-emergent_topics: list[str]       # auto-detected tool-like terms not yet in topics.yaml
+emergent_topics: list[str]       # auto-detected tool-like terms; written to topics.yaml under 'emergent'
 ```
 
 **`HookProfile`**
@@ -1270,7 +1282,7 @@ Registered tools:
 | `extract_topics` | Regex taxonomy match |
 | `compute_salience` | log-TF × coverage score |
 | `compute_tf` | Raw TF per topic |
-| `detect_emergent_topics` | Auto-discover tool-like names not in taxonomy |
+| `detect_emergent_topics` | Auto-discover tool-like names not in taxonomy; writes them to `config/topics.yaml` under `emergent` |
 | `search_hermes_sessions` | FTS5 past-run search (Hermes bridge) |
 | `update_hermes_memory` | Write beliefs to MEMORY.md (Hermes bridge) |
 

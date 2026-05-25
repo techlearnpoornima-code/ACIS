@@ -203,7 +203,7 @@ technical_tools:
     - '\bnewt\b'
 ```
 
-The taxonomy covers 77 topics across four categories: `technical_tools`, `architectures`, `use_cases`, and `business_models`. Agent 2 also runs an **emergent topic detector** that automatically surfaces CamelCase/ALL-CAPS tool names from video text that are not in the taxonomy yet — these appear in the strategic brief as *"Newly detected tools"*.
+The taxonomy covers 77 topics across four categories: `technical_tools`, `architectures`, `use_cases`, and `business_models`. Agent 2 also runs an **emergent topic detector** that automatically surfaces CamelCase/ALL-CAPS tool names from video text that are not in the taxonomy yet. Detected names are **written back to `config/topics.yaml`** under an `emergent` category on the fly — they become first-class topics from the next run onward. They also appear in the strategic brief as *"Newly detected tools"*.
 
 ---
 
