@@ -54,43 +54,46 @@ from acis.tools import (
 _AGENT1_SYS_PROMPT = """\
 You are Agent 1 — Channel Research Agent for ACIS (Autonomous Creator Intelligence System).
 
-Given a YouTube video payload (metadata + transcript segments), produce a ChannelResearchNode
-by calling the provided tools in this exact order:
+Call the tools in this exact order. Steps 1–4 take NO arguments — they operate on the
+video already loaded:
 
-  1. segment_transcript(segments_json, duration_seconds)
-  2. detect_language(text)           -- pass the full_text from the payload
-  3. count_words(text)               -- pass the full_text from the payload
-  4. get_transcript_completeness(segments_json, duration_seconds)
-  5. finalise_research(...)          -- MUST be called last; provide all gathered values
+  1. segment_transcript()               — splits transcript into hook / body / outro windows
+  2. detect_language()                  — identifies the language (ISO 639-1 code)
+  3. count_words()                      — counts total words in the transcript
+  4. get_transcript_completeness()      — fraction (0.0–1.0) of video duration covered
+  5. finalise_research(                 — MUST be called last
+       transcript_completeness,         — float returned by step 4
+       language,                        — string returned by step 2
+       n_words,                         — integer returned by step 3
+       n_words_per_minute,              — compute: round(n_words / (duration_seconds / 60))
+     )
 
 Rules:
-- segments_json must be a JSON array string: '[{"start":0,"duration":18,"text":"..."},...]'
-- Pass the exact text strings returned by segment_transcript into finalise_research.
+- Call each tool exactly once, in order.
+- Steps 1–4 take NO arguments — do not pass any input.
 - Do not fabricate any values; use only what the tools return.
-- If completeness < 0.6, note the low coverage in your reasoning before finalising.
+- If completeness < 0.6, note the low coverage before finalising.
 """
 
 _AGENT2_SYS_PROMPT = """\
 You are Agent 2 — Topic Extractor Agent for ACIS (Autonomous Creator Intelligence System).
 
-Given a ChannelResearchNode JSON, extract topics and score their salience by following these steps:
+Call the tools in this order. Steps 1–2 take NO arguments:
 
-  1. extract_topics_by_pattern(research_node_json)
-     Returns {technical_tools, architectures, use_cases, business_models} lists.
-  2. Review the hook, body, and outro text yourself. Merge any additional topics you are
-     confident about into the four category lists (same keys, JSON arrays).
-     Only add topics genuinely present — do not guess.
-  3. extract_monetisation_signals(text) -- pass combined hook+body+outro text
-  4. compute_topic_salience(research_node_json, topics_json)
-     topics_json = JSON object with the four category keys and merged lists.
-  5. compute_topic_tf(research_node_json, topics_json)
-  6. build_topic_pairs(topics_json)
-  7. finalise_semantic_graph(...) -- MUST be called last; provide all gathered values
+  1. extract_topics_by_pattern()        — regex taxonomy match; returns base topic lists
+  2. extract_monetisation_signals()     — detects course plugs, retainer offers, etc.
+  3. Review the transcript text provided. Merge any additional topics you are confident
+     about into the four category lists. Only add topics genuinely present — do not guess.
+  4. compute_topic_salience(topics_json)   — topics_json = merged JSON from steps 1+3
+  5. compute_topic_tf(topics_json)         — same topics_json
+  6. build_topic_pairs(topics_json)        — same topics_json
+  7. finalise_semantic_graph(...)          — MUST be called last with all gathered values
 
 Rules:
-- topics_json must be a JSON object string: '{"technical_tools":[...],"architectures":[...],...}'
-- All *_json arguments must be valid JSON strings (not Python dicts).
-- Do not fabricate salience scores or TF values — use what the tools return.
+- Steps 1–2 take NO arguments — do not pass any input.
+- topics_json must be a JSON object: '{"technical_tools":[...],"architectures":[...],"use_cases":[...],"business_models":[...]}'
+- All *_json arguments for finalise_semantic_graph must be valid JSON strings.
+- Do not fabricate salience scores or TF values — use only what the tools return.
 """
 
 # ── Serialisation helpers ──────────────────────────────────────────────────────
@@ -150,78 +153,56 @@ class ReActChannelResearchAgent:
     # Written by the finalise_research tool closure; read after agent completes
     _result: dict[str, Any] | None = field(default=None, init=False, repr=False)
 
-    def _build_toolkit(self):
+    def _build_toolkit(self, payload: IngestionPayload):
         toolkit = Toolkit()
-        agent_self = self  # explicit alias so closures capture the right binding
+        agent_self = self
+        _state: dict = {}  # shared mutable state across closures
 
-        def segment_transcript(segments_json: str, duration_seconds: int):
-            """Split transcript segments into hook (0-60s), body (60-80%), and outro windows.
-
-            Args:
-                segments_json: JSON array string — '[{"start":0,"duration":18,"text":"..."},...]'
-                duration_seconds: Total video duration in seconds.
-            """
-            segs = [TranscriptSegment(**s) for s in json.loads(segments_json)]
-            result = _segment_transcript(segs, duration_seconds)
-            return _text_response({
+        def segment_transcript():
+            """Split transcript into hook (0-60s), body (60-80%), and outro windows. No arguments needed."""
+            result = _segment_transcript(payload.transcript_segments, payload.metadata.duration_seconds)
+            _state["segments"] = {
                 k: {"text": v.text, "duration_seconds": v.duration_seconds}
                 for k, v in result.items()
+            }
+            return _text_response(_state["segments"])
+
+        def detect_language():
+            """Detect the primary language of the transcript. Returns an ISO 639-1 language code. No arguments needed."""
+            return _text_response({"language": _detect_language(payload.full_text)})
+
+        def count_words():
+            """Count the number of words in the transcript. No arguments needed."""
+            return _text_response({"word_count": _word_count(payload.full_text)})
+
+        def get_transcript_completeness():
+            """Compute what fraction (0.0–1.0) of the video duration is covered by transcript. No arguments needed."""
+            return _text_response({
+                "transcript_completeness": _validate_completeness(
+                    payload.transcript_segments, payload.metadata.duration_seconds
+                )
             })
-
-        def detect_language(text: str):
-            """Detect the primary language of the transcript. Returns an ISO 639-1 language code."""
-            return _text_response({"language": _detect_language(text)})
-
-        def count_words(text: str):
-            """Count the number of words in the transcript text."""
-            return _text_response({"word_count": _word_count(text)})
-
-        def get_transcript_completeness(segments_json: str, duration_seconds: int):
-            """Compute what fraction (0.0–1.0) of the video duration is covered by transcript segments.
-
-            Args:
-                segments_json: JSON array string — same format as segment_transcript.
-                duration_seconds: Total video duration in seconds.
-            """
-            segs = [TranscriptSegment(**s) for s in json.loads(segments_json)]
-            return _text_response({"transcript_completeness": _validate_completeness(segs, duration_seconds)})
 
         def finalise_research(
             transcript_completeness: float,
             language: str,
             n_words: int,
             n_words_per_minute: int,
-            hook_text: str,
-            hook_duration_seconds: int,
-            body_text: str,
-            body_duration_seconds: int,
-            outro_text: str,
-            outro_duration_seconds: int,
         ):
-            """Complete Agent 1. Call this LAST with all gathered values to finalise the ChannelResearchNode.
+            """Complete Agent 1. Call LAST with scalar values from the tools above.
 
             Args:
                 transcript_completeness: Float 0.0–1.0 from get_transcript_completeness.
                 language: Language code string from detect_language.
                 n_words: Integer word count from count_words.
                 n_words_per_minute: Compute as round(n_words / (duration_seconds / 60)).
-                hook_text: Text string from segment_transcript hook window.
-                hook_duration_seconds: Duration integer from segment_transcript hook window.
-                body_text: Text string from segment_transcript body window.
-                body_duration_seconds: Duration integer from segment_transcript body window.
-                outro_text: Text string from segment_transcript outro window.
-                outro_duration_seconds: Duration integer from segment_transcript outro window.
             """
             agent_self._result = {
                 "transcript_completeness": transcript_completeness,
                 "language": language,
                 "word_count": n_words,
                 "words_per_minute": n_words_per_minute,
-                "segments": {
-                    "hook": {"text": hook_text, "duration_seconds": hook_duration_seconds},
-                    "body": {"text": body_text, "duration_seconds": body_duration_seconds},
-                    "outro": {"text": outro_text, "duration_seconds": outro_duration_seconds},
-                },
+                "segments": _state.get("segments", {}),
             }
             return _text_response({"status": "ChannelResearchNode finalised"})
 
@@ -240,14 +221,20 @@ class ReActChannelResearchAgent:
             sys_prompt=_AGENT1_SYS_PROMPT,
             model=self.model,
             formatter=AnthropicChatFormatter(),
-            toolkit=self._build_toolkit(),
+            toolkit=self._build_toolkit(payload),
             max_iters=self.max_iters,
         )
 
         asyncio.run(agent(Msg(
             name="user",
             role="user",
-            content=f"Process this video payload:\n{_payload_to_msg_content(payload)}",
+            content=(
+                f"Analyse this video:\n"
+                f"video_id: {payload.metadata.video_id}\n"
+                f"title: {payload.metadata.title}\n"
+                f"duration_seconds: {payload.metadata.duration_seconds}\n\n"
+                f"Call the tools in order — they already have access to the transcript data."
+            ),
         )))
 
         if self._result is None:
@@ -301,41 +288,37 @@ class ReActTopicExtractorAgent:
     def _build_toolkit(self, node: ChannelResearchNode):
         toolkit = Toolkit()
         agent_self = self
+        combined_text = " ".join([
+            node.segments["hook"].text,
+            node.segments["body"].text,
+            node.segments["outro"].text,
+        ])
 
-        def extract_topics_by_pattern(research_node_json: str):
-            """Match transcript text against TOPIC_PATTERNS regexes. Returns known topics per category.
+        def extract_topics_by_pattern():
+            """Match transcript text against TOPIC_PATTERNS regexes. Returns known topics per category. No arguments needed."""
+            return _text_response(_extract_topics(node))
 
-            Args:
-                research_node_json: JSON string of the ChannelResearchNode (as provided in the task).
-            """
-            n = _node_from_dict(json.loads(research_node_json))
-            return _text_response(_extract_topics(n))
+        def extract_monetisation_signals():
+            """Identify course plugs, consulting offers, retainer mentions, and cohort offers. No arguments needed."""
+            return _text_response({"signals": _extract_monetisation_signals(combined_text)})
 
-        def extract_monetisation_signals(text: str):
-            """Identify course plugs, consulting offers, retainer mentions, and cohort offers in the text."""
-            return _text_response({"signals": _extract_monetisation_signals(text)})
-
-        def compute_topic_salience(research_node_json: str, topics_json: str):
+        def compute_topic_salience(topics_json: str):
             """Score each topic using log-normalised TF × coverage ratio within this video.
 
             Args:
-                research_node_json: JSON string of the ChannelResearchNode.
-                topics_json: JSON object string — '{"technical_tools":[...],"architectures":[...],...}'
+                topics_json: JSON object string — '{"technical_tools":[...],"architectures":[...],"use_cases":[...],"business_models":[...]}'
             """
-            n = _node_from_dict(json.loads(research_node_json))
             topics = json.loads(topics_json)
-            return _text_response(_compute_salience(n, topics))
+            return _text_response(_compute_salience(node, topics))
 
-        def compute_topic_tf(research_node_json: str, topics_json: str):
-            """Compute raw per-video TF for each topic; stored in DB for cross-corpus IDF calculation.
+        def compute_topic_tf(topics_json: str):
+            """Compute raw per-video TF for each topic.
 
             Args:
-                research_node_json: JSON string of the ChannelResearchNode.
                 topics_json: JSON object string — same format as compute_topic_salience.
             """
-            n = _node_from_dict(json.loads(research_node_json))
             topics = json.loads(topics_json)
-            return _text_response(_compute_tf(n, topics))
+            return _text_response(_compute_tf(node, topics))
 
         def build_topic_pairs(topics_json: str):
             """Build all unique co-occurrence pairs across topic categories for graph edges.
@@ -409,9 +392,9 @@ class ReActTopicExtractorAgent:
             name="user",
             role="user",
             content=(
-                f"Extract topics from this ChannelResearchNode:\n"
-                f"{json.dumps(node.to_dict(), ensure_ascii=False)}\n\n"
-                f"Combined transcript text:\n{combined_text}"
+                f"Extract topics for video '{node.video_id}' — title: {node.title!r}.\n\n"
+                f"Transcript text:\n{combined_text}\n\n"
+                f"Call the tools in order — they already have access to the research node data."
             ),
         )))
 
