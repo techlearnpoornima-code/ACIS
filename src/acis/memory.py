@@ -215,6 +215,11 @@ class MemoryStore:
         self._beliefs[new_id] = new_belief
         return new_belief
 
+    def seed_from_beliefs(self, beliefs: list[Belief]) -> None:
+        """Populate the in-memory store from a pre-loaded list (e.g. from PostgreSQL)."""
+        for b in beliefs:
+            self._beliefs[b.belief_id] = b
+
     def get_all(self) -> list[Belief]:
         """Return all beliefs sorted by belief_id."""
         return sorted(self._beliefs.values(), key=lambda b: b.belief_id)

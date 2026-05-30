@@ -1,7 +1,7 @@
 # ACIS — Technical Reference
 
 **AI Competitive Intelligence System**  
-A 6-agent pipeline — deterministic by default, LLM-powered via AgentScope — that analyses YouTube AI creator channels and produces a McKinsey-structured strategic brief with actionable content recommendations. Hermes Agent provides the persistent runtime: cross-session belief memory, FTS5 session search, cron scheduling, and multi-platform brief delivery.
+A 6-agent pipeline — deterministic by default, LLM-powered via AgentScope — that analyses YouTube AI creator channels and produces a McKinsey-structured strategic brief with actionable content recommendations. PostgreSQL is the single persistence layer: video history, transcript cache, gap detection history, and Bayesian belief store all live in the same database.
 
 ---
 
@@ -34,9 +34,10 @@ A 6-agent pipeline — deterministic by default, LLM-powered via AgentScope — 
     - [Agent 1 toolkit](#agent-1-toolkit)
     - [Agent 2 toolkit](#agent-2-toolkit)
     - [Fallback behaviour](#fallback-behaviour)
-11. [Hermes Integration](#11-hermes-integration)
-    - [What Hermes provides](#what-hermes-provides)
-    - [Hermes bridge](#hermes-bridge-srcacishermes_bridgepy)
+11. [PostgreSQL Persistence](#11-postgresql-persistence)
+    - [gap\_detections table](#gap_detections-table)
+    - [beliefs table](#beliefs-table)
+    - [gap\_detections vs beliefs](#gap_detections-vs-beliefs)
     - [Agent wiring](#agent-wiring)
     - [Skill packaging](#skill-packaging-skillsacisskillmd)
     - [Docker deployment](#docker-deployment)
@@ -1030,6 +1031,8 @@ uv run python run.py --agentscope                  # LLM agents for A1+A2
 | `videos` | Ingestion | `video_id`, `upload_date`, `view_count`, `duration_seconds` |
 | `transcripts` | Ingestion | `video_id`, `hook_text`, `body_text`, `outro_text`, `source` |
 | `transcript_cache` | Ingestion | `video_id`, `segments_json` (raw), `source`, `fetched_at` |
+| `gap_detections` | Agent 5 | `run_id`, `topic`, `saturation_score`, `confidence`, `detected_at` |
+| `beliefs` | Agent 6 | `belief_id`, `statement`, `confidence`, `evidence_count`, `last_confirmed`, `half_life_days` |
 | `video_comments` | Ingestion | `video_id`, `like_count` |
 | `agent_outputs` | Pipeline | `video_id`, `agent_id`, `output_json` |
 | `topic_tf` | Agent 2 | `video_id`, `topic`, `tf_score` |
@@ -1111,114 +1114,87 @@ agent2 = SingleShotTopicExtractorAgent(**model_config)
 
 ---
 
-## 11. Hermes Integration
+## 11. PostgreSQL Persistence
 
-### What Hermes provides
+ACIS uses PostgreSQL as the single persistence layer for everything that needs to survive across runs. No external runtime or additional service is required.
 
-Hermes Agent (NousResearch) is the **persistent runtime layer** that ACIS runs inside. It is not an orchestration framework — it is the environment agents live in between runs.
+### gap_detections table
 
-| Hermes capability | How ACIS uses it |
-|---|---|
-| **Persistent MEMORY.md** | Strategic beliefs survive across runs via Bayesian confidence updates |
-| **FTS5 session search** | Agent 5 queries past run outputs: "was this gap previously identified?" |
-| **Cron scheduler** | ACIS runs automatically every Sunday at 08:00 — no cron infrastructure needed |
-| **Multi-platform gateway** | Strategic brief delivered to Telegram or CLI — no custom delivery code |
-| **Provider abstraction** | Switch LLM backend (Anthropic → OpenRouter → OpenAI) with `hermes model` |
-| **Skill system** | ACIS packaged as a named skill, callable from any Hermes gateway |
+**Migration:** `migrations/006_gap_detections.sql`  
+**Written by:** Agent 5 (via `DatabaseRepository.save_gap_detections()`, called from `complete_run()`)  
+**Read by:** Agent 5 (`_search_past_gaps()`) at the start of each candidate evaluation
 
-Hermes runs as a Docker container (port 8765). When `HERMES_BASE_URL` is set, ACIS routes memory and search calls to the Hermes API. When it is unset, ACIS falls back to a local `output/memory.md` file — so the pipeline runs without Hermes in all development and sample-data scenarios.
+```sql
+gap_detections (
+    run_id           UUID,         -- which run flagged this
+    topic            TEXT,         -- e.g. "Gemini"
+    saturation_score FLOAT,        -- 0.0 = nobody covered it
+    confidence       FLOAT,        -- Agent 5 opportunity confidence score
+    detected_at      TIMESTAMPTZ
+)
+-- GIN index on to_tsvector('english', topic) for FTS
+```
 
-### Hermes bridge (`src/acis/hermes_bridge.py`)
-
-The bridge is the sole integration point between the ACIS Python codebase and the Hermes runtime. It exports three public symbols:
-
-**`BeliefDelta` dataclass**
+Every topic Agent 5 flags as a white-space opportunity is written here. On the next run, Agent 5 queries this table to determine whether the same gap was seen before:
 
 ```python
-@dataclass
-class BeliefDelta:
-    statement: str           # human-readable belief statement
-    evidence_strength: float # ∈ [-1, 1]; positive = confirms, negative = contradicts
-    tags: list[str]          # e.g. ["white-space", "opportunity"]
-    half_life_days: int      # confidence decay speed (30 = fast, 90 = slow)
+past_hits = self._search_past_gaps(topic)
+# → "Recurring gap: confirmed in 2 prior ACIS run(s) (PostgreSQL FTS)"
+# → "First-time detection — no prior run in DB confirms this gap"
 ```
 
-**`search_hermes_sessions(query: str) → list[dict]`**
+---
 
-Calls `GET {HERMES_BASE_URL}/api/sessions/search?q={query}&limit=10`. Returns a list of matching session summaries from the Hermes FTS5 index — every past ACIS run output is indexed and searchable. Returns `[]` if Hermes is unreachable.
+### beliefs table
 
-**`update_hermes_memory(belief_deltas, *, memory_store=None) → str`**
+**Migration:** `migrations/007_beliefs.sql`  
+**Written by:** Agent 6 (via `DatabaseRepository.save_beliefs()`, called from `_update_beliefs()`)  
+**Read by:** `_build_memory_store()` in `runner.py` at startup — seeds `MemoryStore` from DB before the run begins
 
-Calls `POST {HERMES_BASE_URL}/api/memory/update` with belief delta payloads. Hermes performs the Bayesian confidence update and writes to its persistent `MEMORY.md`. Falls back to `MemoryStore.update()` + local file write if Hermes is unreachable or `HERMES_BASE_URL` is unset. Returns a Markdown summary of what changed.
-
-**Routing logic:**
-
-```
-HERMES_BASE_URL set?
-  ├── yes → call Hermes HTTP API
-  │          ├── success → Hermes writes MEMORY.md, returns summary
-  │          └── error   → print warning, fall through to local fallback
-  └── no  → local MemoryStore (output/memory.md)
-```
-
-### Agent wiring
-
-**Agent 5 — Gap Detector** calls `search_hermes_sessions` per candidate opportunity before finalising the output:
-
-```python
-hermes_hits = search_hermes_sessions(f"gap opportunity {topic}")
-evidence = _build_evidence_chain(..., hermes_hits=hermes_hits)
+```sql
+beliefs (
+    belief_id       VARCHAR(64),  -- e.g. "BELIEF-001"
+    statement       TEXT,         -- human-readable claim
+    confidence      FLOAT,        -- 0–1; Bayesian updated each run
+    evidence_count  INTEGER,      -- how many runs confirmed this
+    last_confirmed  DATE,         -- date of most recent confirmation
+    half_life_days  INTEGER,      -- decay speed (30 = fast, 60 = slow)
+    tags            TEXT[],       -- e.g. {"white-space", "opportunity"}
+    updated_at      TIMESTAMPTZ
+)
 ```
 
-The evidence chain reads:
-- `"Recurring gap: confirmed in N prior ACIS run(s) via Hermes FTS5"` — when past sessions match
-- `"First-time detection — no prior ACIS session confirms this gap"` — when no hits
+Two types of beliefs are written per run:
 
-**Agent 6 — Synthesizer** collects `BeliefDelta` objects from all performance correlations and white-space opportunities, then calls `update_hermes_memory` once at end of run:
+| Source | Example statement | Strength | Half-life |
+|---|---|---|---|
+| Agent 4 significant correlation | `duration_bucket=10-15min correlates with >1.5x velocity on nick-saraev` | 0.25–0.60 | 60 days |
+| Agent 5 high-confidence gap | `'Gemini' is a white-space opportunity (saturation 0.00)` | 0.25 | 30 days |
 
-```python
-belief_deltas = [
-    BeliefDelta(
-        statement="duration_bucket=10-15min correlates with >1.5x velocity on nick-saraev",
-        evidence_strength=0.60,
-        tags=["performance-correlation", "duration_bucket", "nick-saraev"],
-    ),
-    BeliefDelta(
-        statement="'Gemini' is a white-space opportunity (saturation 0.00)",
-        evidence_strength=0.25,
-        tags=["white-space", "opportunity"],
-        half_life_days=30,
-    ),
-]
-summary = update_hermes_memory(belief_deltas, memory_store=memory_store)
-```
+**Startup loading:** When `DATABASE_URL` is set, `_build_memory_store()` calls `repo.load_beliefs()` to seed the in-memory `MemoryStore` from the DB — so each run starts with the full accumulated belief history. When no DB is available, it falls back to loading `output/memory.md` if the `--memory` flag was passed.
 
-### Skill packaging (`skills/acis/skill.md`)
+**End-of-run save:** After Agent 6 applies Bayesian updates and decay, all beliefs are written back to the DB via `repo.save_beliefs()` (upsert on `belief_id`). A human-readable dump is also written to `output/memory.md`.
 
-ACIS is packaged as a Hermes skill, stored at `skills/acis/skill.md` and mounted into the Hermes container at `~/.hermes/skills/acis/skill.md`. This allows calling ACIS from any Hermes gateway using natural language:
+---
 
-```
-"Run ACIS"                           → full run, all channels
-"Run ACIS delta"                     → incremental run, new videos only
-"Run ACIS for @liamottley"           → single channel run
-"Show ACIS beliefs"                  → display MEMORY.md belief graph
-"What did ACIS find about Claude Code?" → FTS5 search past outputs
-```
+### gap_detections vs beliefs
 
-**Cron schedule** defined in `skill.md`: `Every Sunday at 08:00. Deliver to Telegram.`  
-No custom scheduler code is required — Hermes interprets the natural language schedule and triggers the skill at the configured time.
+| | `gap_detections` | `beliefs` |
+|---|---|---|
+| **What it stores** | Raw log of every gap flagged per run | Accumulated confidence-weighted conclusions |
+| **Rows** | One per opportunity per run | One per unique belief statement |
+| **Grows** | A new row every run | One row per belief, updated in place |
+| **Used by** | Agent 5 — evidence chain | Agent 6 — brief + future context |
+| **Purpose** | "Has this gap appeared before?" | "How confident are we this is true?" |
+
+---
 
 ### Docker deployment
 
-`docker-compose.yml` brings up two services:
+`docker-compose.yml` brings up one service — PostgreSQL only:
 
 ```yaml
-hermes:        # NousResearch Hermes Agent — port 8765
-  volumes:
-    - ./skills/acis → mounted as the ACIS skill
-    - ./output      → mounted as Hermes session index (makes run outputs searchable via FTS5)
-
-postgres:      # PostgreSQL 16 — port 5432
+postgres:   # PostgreSQL 16 — port 5432
   volumes:
     - ./migrations → auto-applied on first container start
 ```
@@ -1229,7 +1205,7 @@ cp .env.example .env    # fill in YOUTUBE_API_KEY, ANTHROPIC_API_KEY, POSTGRES_P
 docker compose up -d
 ```
 
-Set `HERMES_BASE_URL=http://localhost:8765` in `.env` to enable the bridge.
+All 7 migrations are applied automatically on first container start.
 
 ### MCP server (`mcp_serve.py`)
 

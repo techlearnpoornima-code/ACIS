@@ -4,7 +4,7 @@ import statistics
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from acis.hermes_bridge import BeliefDelta, update_hermes_memory
+from dataclasses import field as _field
 from acis.models import (
     OpportunityVector,
     PerformanceScoringMatrix,
@@ -14,6 +14,16 @@ from acis.models import (
 
 _STRONG_EVIDENCE = 0.6
 _WEAK_EVIDENCE = 0.25
+
+
+@dataclass
+class BeliefDelta:
+    """A single belief change written to the local MEMORY.md belief store."""
+
+    statement: str
+    evidence_strength: float  # ∈ [-1, 1]
+    tags: list[str] = _field(default_factory=list)
+    half_life_days: int = 60
 
 
 def _build_situation(
@@ -269,11 +279,11 @@ def _update_beliefs(
     perf_matrices: dict[str, PerformanceScoringMatrix],
     opportunity_vector: OpportunityVector,
     memory_store: object | None,
+    db_repo: object | None = None,
 ) -> str:
-    """Collect belief deltas from this run and write them via the Hermes bridge.
+    """Collect belief deltas and write to PostgreSQL (primary) and/or local MEMORY.md (fallback)."""
+    from acis.memory import MemoryStore  # noqa: PLC0415
 
-    Routes to the Hermes API when HERMES_BASE_URL is set; falls back to local MEMORY.md otherwise.
-    """
     belief_deltas: list[BeliefDelta] = []
 
     for matrix in perf_matrices.values():
@@ -301,7 +311,33 @@ def _update_beliefs(
                 half_life_days=30,
             ))
 
-    return update_hermes_memory(belief_deltas, memory_store=memory_store)
+    if not belief_deltas:
+        return "_No belief updates this run._\n"
+
+    if not isinstance(memory_store, MemoryStore):
+        return "_Memory store not configured — belief graph not updated._\n"
+
+    memory_store.decay_all()
+    updated_ids = [
+        memory_store.update(
+            statement=d.statement,
+            evidence_strength=d.evidence_strength,
+            tags=d.tags,
+            half_life_days=d.half_life_days,
+        ).belief_id
+        for d in belief_deltas
+    ]
+
+    # Always persist to PostgreSQL when available — DB is the authoritative store
+    if db_repo is not None:
+        try:
+            db_repo.save_beliefs(memory_store.get_all())
+        except Exception as exc:
+            print(f"  ⚠ Could not save beliefs to DB ({exc}) — local memory.md still updated")
+
+    # Write human-readable dump alongside the DB record
+    memory_store.save()
+    return memory_store.format_delta_summary(updated_ids)
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +349,7 @@ class SynthesizerAgent:
     """Agent 6: McKinsey-structured brief writer and Bayesian belief graph updater."""
 
     agent_id: str = "agent_6_synthesizer"
+    db_repo: object | None = None  # DatabaseRepository for belief persistence
 
     def run(
         self,
@@ -330,5 +367,7 @@ class SynthesizerAgent:
             recommendations=_build_recommendations(results, perf_matrices, opportunity_vector),
             evidence=_build_evidence(results, perf_matrices, opportunity_vector),
             risks_and_falsification=_build_risks(opportunity_vector),
-            belief_graph_deltas=_update_beliefs(perf_matrices, opportunity_vector, memory_store),
+            belief_graph_deltas=_update_beliefs(
+                perf_matrices, opportunity_vector, memory_store, db_repo=self.db_repo
+            ),
         )

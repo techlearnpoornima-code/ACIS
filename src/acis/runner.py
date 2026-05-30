@@ -83,6 +83,37 @@ class AcisApplication:
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+def _build_memory_store(
+    memory_path: Path | None,
+    repo: object | None,
+    project_root: Path,
+) -> object | None:
+    """Create a MemoryStore seeded from PostgreSQL (primary) or local file (fallback).
+
+    When a DB repo is available, beliefs are always tracked regardless of --memory flag.
+    """
+    from acis.memory import MemoryStore  # noqa: PLC0415
+
+    if repo is None and memory_path is None:
+        return None
+
+    path = memory_path or (project_root / "output" / "memory.md")
+    store = MemoryStore(path)
+
+    if repo is not None:
+        try:
+            beliefs = repo.load_beliefs()
+            if beliefs:
+                store.seed_from_beliefs(beliefs)
+                return store
+        except Exception:
+            pass  # beliefs table may not exist yet on first run
+
+    if path.exists():
+        store.load()
+    return store
+
+
 def _filter_channels(config: AppConfig, channel_filter: str | None) -> AppConfig:
     """Return a copy of config restricted to the requested channel handle, if specified."""
     if channel_filter is None:
@@ -148,20 +179,15 @@ def build_live_app(
         ),
     )
 
-    memory_store = None
-    if memory_path is not None:
-        from acis.memory import MemoryStore  # noqa: PLC0415
-        memory_store = MemoryStore(memory_path)
-        if memory_path.exists():
-            memory_store.load()
+    memory_store = _build_memory_store(memory_path, repo, project_root)
 
     pipeline = FullPipeline(
         channel_researcher=ChannelResearchAgent(),
         topic_extractor=TopicExtractorAgent(),
         hook_analyzer=HookAnalyzerAgent(),
         performance_correlator=PerformanceCorrelatorAgent(),
-        gap_detector=GapDetectorAgent(),
-        synthesizer=SynthesizerAgent(),
+        gap_detector=GapDetectorAgent(db_repo=repo),
+        synthesizer=SynthesizerAgent(db_repo=repo),
         memory_store=memory_store,
     )
     return AcisApplication(
@@ -245,20 +271,15 @@ def build_agentscope_app(
 
     ingestion_service = IngestionService(config=config, client=client)
 
-    memory_store = None
-    if memory_path is not None:
-        from acis.memory import MemoryStore  # noqa: PLC0415
-        memory_store = MemoryStore(memory_path)
-        if memory_path.exists():
-            memory_store.load()
+    memory_store = _build_memory_store(memory_path, repo, project_root)
 
     pipeline = FullPipeline(
         channel_researcher=ChannelResearchAgent(),
         topic_extractor=SingleShotTopicExtractorAgent(**model_config),
         hook_analyzer=HookAnalyzerAgent(),
         performance_correlator=PerformanceCorrelatorAgent(),
-        gap_detector=GapDetectorAgent(),
-        synthesizer=SynthesizerAgent(),
+        gap_detector=GapDetectorAgent(db_repo=repo),
+        synthesizer=SynthesizerAgent(db_repo=repo),
         memory_store=memory_store,
     )
     return AcisApplication(
@@ -296,12 +317,7 @@ def build_full_sample_app(
         client=SampleIngestionClient(project_root / "data" / "sample_channels.json"),
     )
 
-    memory_store = None
-    if memory_path is not None:
-        from acis.memory import MemoryStore  # noqa: PLC0415
-        memory_store = MemoryStore(memory_path)
-        if memory_path.exists():
-            memory_store.load()
+    memory_store = _build_memory_store(memory_path, None, project_root)
 
     pipeline = FullPipeline(
         channel_researcher=ChannelResearchAgent(),

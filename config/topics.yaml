@@ -215,3 +215,23 @@ emergent:
   - \blinkedin\b
   YouTube:
   - \byoutube\b
+  USD:
+  - \busd\b
+  GBT:
+  - \bgbt\b
+  AAA:
+  - \baaa\b
+  OpenClaw:
+  - \bopenclaw\b
+  ClickUp:
+  - \bclickup\b
+  Mythos:
+  - \bmythos\b
+  XYZ:
+  - \bxyz\b
+  Paperclip:
+  - \bpaperclip\b
+  SEO:
+  - \bseo\b
+  CEO:
+  - \bceo\b

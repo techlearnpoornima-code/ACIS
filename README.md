@@ -37,20 +37,12 @@ flowchart TD
     end
 
     subgraph Ingestion["Ingestion Layer"]
-        YTAPI["youtube-transcript-api\nauto-captions"]
+        YTAPI["youtube-transcript-api\nauto-captions · transcript cache"]
         SVC["IngestionService\ndeduplication · rate-limiting"]
     end
 
-    subgraph Hermes["Hermes Agent  ·  NousResearch  ·  port 8765"]
-        HM["Persistent MEMORY.md\nBayesian belief store"]
-        FTS["FTS5 Session Search\npast run recall"]
-        CRON["Cron Scheduler\nEvery Sunday 08:00"]
-        GW["Gateway Delivery\nTelegram · CLI"]
-    end
-
     subgraph LLM["LLM Layer  ·  AgentScope"]
-        CLAUDE["Anthropic Claude API\nclaude-sonnet-4-6"]
-        AS["AgentScope ReActAgent"]
+        CLAUDE["Anthropic Claude API\nclaude-sonnet-4-6\n1 call/video"]
     end
 
     subgraph Pipeline["Agent Pipeline  ·  Python 3.11"]
@@ -63,30 +55,28 @@ flowchart TD
     end
 
     subgraph Storage["Storage & Config"]
-        PG[("PostgreSQL\nSQLAlchemy · psycopg2")]
+        PG[("PostgreSQL\nvideos · transcripts · beliefs\ngap_detections · runs")]
         YAML["config/topics.yaml\nPyYAML · 77 topics"]
     end
 
     subgraph Output["Outputs"]
         JSON["output/latest_run.json"]
         BRIEF["output/strategic_brief.md"]
-        MEM["output/memory.md\nHermes MEMORY.md format\nBayesian belief store"]
+        MEM["output/memory.md\nBayesian belief store dump"]
     end
 
     YT --> YTAPI --> SVC
     SAMPLE --> SVC
-    CLAUDE --> AS --> A1
-    AS --> A2
+    CLAUDE --> A2
     SVC --> A1 --> A2 --> A3 --> A4 --> A5 --> A6
     YAML --> A2
-    PG -- deduplication --> SVC
-    A5 -- search_hermes_sessions --> FTS
-    A6 -- update_hermes_memory --> HM
+    PG -- transcript cache + deduplication --> SVC
+    A5 -- gap_detections FTS --> PG
+    A6 -- beliefs upsert --> PG
     A6 --> JSON
     A6 --> BRIEF
-    A6 --> GW
+    A6 --> MEM
     A6 --> PG
-    CRON --> SVC
 ```
 
 ### Layer breakdown
@@ -100,12 +90,11 @@ flowchart TD
 | **NLP / analysis** | Python `re` · `math` · `collections` | Regex topic matching, TF scoring, hype score, Mann-Whitney U |
 | **Config / taxonomy** | PyYAML | YAML-driven topic taxonomy — add tools without touching code |
 | **Language detection** | `langdetect` | Transcript language identification |
-| **Database** | PostgreSQL · SQLAlchemy · psycopg2-binary | Video persistence, run history, deduplication, transcript cache |
+| **Database** | PostgreSQL · SQLAlchemy · psycopg2-binary | Video persistence, run history, deduplication, transcript cache, belief store, gap history |
+| **Belief store** | `src/acis/memory.py` · PostgreSQL `beliefs` table | Bayesian confidence updates per run; loaded from DB at startup, saved to DB + `output/memory.md` after each run |
+| **Gap history** | PostgreSQL `gap_detections` table | Records every white-space opportunity per run; Agent 5 queries via PostgreSQL FTS to detect recurring gaps |
 | **HTTP** | `requests` | Thumbnail downloads |
-| **Agent runtime** | Hermes Agent (NousResearch) | Persistent MEMORY.md belief store, FTS5 session search, cron scheduling, multi-platform delivery (Telegram/CLI) |
-| **Hermes bridge** | `src/acis/hermes_bridge.py` | `search_hermes_sessions()` (Agent 5) + `update_hermes_memory()` (Agent 6); falls back to local MEMORY.md when `HERMES_BASE_URL` is unset |
-| **Hermes skill** | `skills/acis/skill.md` | ACIS packaged as a callable Hermes skill: "Run ACIS", "Show ACIS beliefs", scheduled weekly |
-| **MCP server** | `mcp_serve.py` | Exposes ingestion + bridge tools as MCP endpoints for Hermes to invoke directly |
+| **MCP server** | `mcp_serve.py` | Exposes ingestion and analysis tools as MCP endpoints |
 | **Environment** | `python-dotenv` | `.env` loading for API keys |
 
 ---
@@ -170,7 +159,7 @@ uv run python run.py --channel @liamottley --force-reprocess --memory output/mem
 | Flag | Default | Description |
 |---|---|---|
 | `--full` | off | Run all 6 agents against bundled sample data (no API key needed) |
-| `--memory PATH` | `output/memory.md` | Belief store path — created on first run, updated each run |
+| `--memory PATH` | none | Path for local `memory.md` belief dump. Not needed when `DATABASE_URL` is set — beliefs are stored in PostgreSQL automatically |
 | `--limit N` | from config | Cap videos per channel |
 | `--channel @handle` | all channels | Process a single channel only |
 | `--force-reprocess` | off | Bypass DB deduplication and reprocess everything |
@@ -188,7 +177,7 @@ uv run python run.py --channel @liamottley --force-reprocess --memory output/mem
 |---|---|
 | `output/latest_run.json` | Full structured run — all agent outputs, metrics, every video |
 | `output/strategic_brief.md` | McKinsey SCR brief with situation, complication, recommendations |
-| `output/memory.md` | Persistent belief store — confidence-weighted observations across runs |
+| `output/memory.md` | Human-readable belief store dump — written each run alongside PostgreSQL |
 
 ---
 
@@ -233,6 +222,8 @@ psql $DATABASE_URL -f migrations/002_topic_tf.sql
 psql $DATABASE_URL -f migrations/003_phase2.sql
 psql $DATABASE_URL -f migrations/004_phase3.sql
 psql $DATABASE_URL -f migrations/005_transcript_cache.sql
+psql $DATABASE_URL -f migrations/006_gap_detections.sql
+psql $DATABASE_URL -f migrations/007_beliefs.sql
 ```
 
 ---

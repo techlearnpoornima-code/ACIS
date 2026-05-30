@@ -6,6 +6,4 @@ channels:
   - channel_id: nick-saraev
     handle: "@nicksaraev"
     display_name: "Nick Saraev"
-  - channel_id: alex-finn
-    handle: "@alexfinn"
-    display_name: "Alex Finn"
+

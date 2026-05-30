@@ -1,18 +1,5 @@
 services:
 
-  hermes:
-    image: nousresearch/hermes-agent:latest
-    ports:
-      - "8765:8765"
-    volumes:
-      - hermes_data:/root/.hermes
-      - ./skills/acis:/root/.hermes/skills/acis   # mount ACIS skill into Hermes
-      - ./output:/root/.hermes/sessions/acis       # Hermes session index over run outputs
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
-    restart: unless-stopped
-
   postgres:
     image: postgres:16
     environment:
@@ -27,5 +14,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  hermes_data:
   pg_data:

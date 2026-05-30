@@ -3,7 +3,6 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass
 
-from acis.hermes_bridge import search_hermes_sessions
 from acis.models import OpportunityItem, OpportunityVector, VideoPipelineResult
 from acis.tools import TOPIC_PATTERNS
 
@@ -119,10 +118,10 @@ def _build_evidence_chain(
         evidence.append(f"Mean salience across covering channels: {mean_sal:.4f}")
     if hermes_hits:
         evidence.append(
-            f"Recurring gap: confirmed in {len(hermes_hits)} prior ACIS run(s) via Hermes FTS5"
+            f"Recurring gap: confirmed in {len(hermes_hits)} prior ACIS run(s) (PostgreSQL FTS)"
         )
     else:
-        evidence.append("First-time detection — no prior ACIS session confirms this gap")
+        evidence.append("First-time detection — no prior run in DB confirms this gap")
     return evidence
 
 
@@ -137,6 +136,15 @@ class GapDetectorAgent:
     agent_id: str = "agent_5_gap_detector"
     saturation_threshold: float = _SATURATION_THRESHOLD
     max_opportunities: int = 5
+    db_repo: object | None = None  # DatabaseRepository for past-gap FTS lookup
+
+    def _search_past_gaps(self, topic: str) -> list[dict]:
+        if self.db_repo is None:
+            return []
+        try:
+            return self.db_repo.search_past_gaps(topic)
+        except Exception:
+            return []
 
     def run(self, results: list[VideoPipelineResult]) -> OpportunityVector:
         if not results:
@@ -191,7 +199,7 @@ class GapDetectorAgent:
             if confidence < _MIN_CONFIDENCE:
                 continue
 
-            hermes_hits = search_hermes_sessions(f"gap opportunity {topic}")
+            hermes_hits = self._search_past_gaps(topic)
             evidence = _build_evidence_chain(
                 topic, saturation, covering_channels,
                 total_channels, adjacent, channel_topics,

@@ -64,6 +64,104 @@ class DatabaseRepository:
         print(f"    ↩ {video_id}: transcript from transcripts table (legacy cache)")
         return segments, row2[3] or "api"
 
+    def save_beliefs(self, beliefs: list) -> None:
+        """Upsert all beliefs to the beliefs table — DB is the authoritative store."""
+        from sqlalchemy import text  # noqa: PLC0415
+        if not beliefs:
+            return
+        with self._engine.begin() as conn:
+            for b in beliefs:
+                conn.execute(
+                    text(
+                        "INSERT INTO beliefs "
+                        "(belief_id, statement, confidence, evidence_count, "
+                        " last_confirmed, half_life_days, tags, updated_at) "
+                        "VALUES (:bid, :stmt, :conf, :ec, :lc, :hl, :tags, NOW()) "
+                        "ON CONFLICT (belief_id) DO UPDATE SET "
+                        "statement = EXCLUDED.statement, "
+                        "confidence = EXCLUDED.confidence, "
+                        "evidence_count = EXCLUDED.evidence_count, "
+                        "last_confirmed = EXCLUDED.last_confirmed, "
+                        "half_life_days = EXCLUDED.half_life_days, "
+                        "tags = EXCLUDED.tags, "
+                        "updated_at = NOW()"
+                    ),
+                    {
+                        "bid": b.belief_id,
+                        "stmt": b.statement,
+                        "conf": b.confidence,
+                        "ec": b.evidence_count,
+                        "lc": b.last_confirmed,
+                        "hl": b.half_life_days,
+                        "tags": b.tags,
+                    },
+                )
+
+    def load_beliefs(self) -> list:
+        """Load all beliefs from the DB to seed a MemoryStore on startup."""
+        from sqlalchemy import text  # noqa: PLC0415
+        from acis.memory import Belief  # noqa: PLC0415
+        from datetime import date  # noqa: PLC0415
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT belief_id, statement, confidence, evidence_count, "
+                    "last_confirmed, half_life_days, tags FROM beliefs"
+                )
+            ).fetchall()
+        return [
+            Belief(
+                belief_id=r[0],
+                statement=r[1],
+                confidence=r[2],
+                evidence_count=r[3],
+                last_confirmed=r[4] if isinstance(r[4], date) else date.fromisoformat(str(r[4])),
+                half_life_days=r[5],
+                tags=list(r[6]) if r[6] else [],
+            )
+            for r in rows
+        ]
+
+    def search_past_gaps(self, topic: str) -> list[dict]:
+        """FTS search for previous runs where this topic was identified as a gap opportunity."""
+        from sqlalchemy import text  # noqa: PLC0415
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT topic, saturation_score, confidence, detected_at "
+                    "FROM gap_detections "
+                    "WHERE to_tsvector('english', topic) @@ plainto_tsquery('english', :q) "
+                    "   OR topic ILIKE :pat "
+                    "ORDER BY detected_at DESC LIMIT 5"
+                ),
+                {"q": topic, "pat": f"%{topic}%"},
+            ).fetchall()
+        return [
+            {"topic": r[0], "saturation_score": r[1], "confidence": r[2], "detected_at": str(r[3])}
+            for r in rows
+        ]
+
+    def save_gap_detections(self, run_id: str, opportunity_vector: object) -> None:
+        """Persist gap opportunity topics for future FTS lookup."""
+        from sqlalchemy import text  # noqa: PLC0415
+        opps = getattr(opportunity_vector, "opportunities", [])
+        if not opps:
+            return
+        with self._engine.begin() as conn:
+            for opp in opps:
+                conn.execute(
+                    text(
+                        "INSERT INTO gap_detections (run_id, topic, saturation_score, confidence) "
+                        "VALUES (:run_id, :topic, :sat, :conf)"
+                    ),
+                    {
+                        "run_id": run_id,
+                        "topic": opp.topic,
+                        "sat": opp.saturation_score,
+                        "conf": opp.confidence,
+                    },
+                )
+
     def save_transcript_cache(self, video_id: str, segments: list, source: str) -> None:
         """Persist raw transcript segments so future runs skip the YouTube API call."""
         from sqlalchemy import text  # noqa: PLC0415
@@ -138,6 +236,9 @@ class DatabaseRepository:
                     "vs": summary.videos_skipped,
                 },
             )
+
+        if summary.opportunity_vector is not None:
+            self.save_gap_detections(summary.run_id, summary.opportunity_vector)
 
     def _upsert_channel(self, conn, result: VideoPipelineResult) -> None:
         from sqlalchemy import text  # noqa: PLC0415

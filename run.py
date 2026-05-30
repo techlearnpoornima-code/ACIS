@@ -44,10 +44,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="PATH",
         help=(
-            "Path to local MEMORY.md belief store. "
-            "Not needed when HERMES_BASE_URL is set — Hermes owns memory via its API. "
-            "Without Hermes, pass a path (e.g. output/memory.md) to persist Bayesian beliefs "
-            "across runs; created on first run."
+            "Path to local MEMORY.md belief store (e.g. output/memory.md). "
+            "Created on first run; updated with Bayesian belief deltas on each run."
         ),
     )
     parser.add_argument(
@@ -110,16 +108,7 @@ def main() -> None:
     project_root = Path(__file__).resolve().parent
     force_reprocess = args.force_reprocess or args.mode == "full"
 
-    hermes_url = os.environ.get("HERMES_BASE_URL")
-    if args.memory:
-        memory_path = Path(args.memory).resolve()
-        if hermes_url:
-            print(
-                f"Note: HERMES_BASE_URL is set — Hermes owns memory. "
-                f"--memory {args.memory} will be used only as a local fallback."
-            )
-    else:
-        memory_path = None
+    memory_path = Path(args.memory).resolve() if args.memory else None
     _delay_env = os.environ.get("YTAPI_TRANSCRIPT_DELAY")
     transcript_delay = (
         args.transcript_delay
