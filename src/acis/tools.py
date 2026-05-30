@@ -147,6 +147,9 @@ _EMERGENT_EXCLUSIONS: frozenset[str] = frozenset({
     # Common title/video noise words
     "Ep", "Episode", "Series", "Mini", "Intro", "Outro",
     "Pro", "Plus", "Max", "Ultra", "Premium",
+    # ALL-CAPS English words that pass the heuristic
+    "CODE", "FULL", "HOURS", "LIVE", "FREE", "REAL", "BEST", "TIPS",
+    "PART", "STEP", "LIST", "TYPE", "SHOW", "MAKE", "TAKE", "GIVE",
 })
 
 

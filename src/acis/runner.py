@@ -202,7 +202,7 @@ def build_agentscope_app(
             "ANTHROPIC_API_KEY environment variable is required for --agentscope mode."
         )
 
-    model = init_agentscope(model_name=model_name, api_key=api_key)
+    model_config = init_agentscope(model_name=model_name, api_key=api_key)
     config = _filter_channels(
         load_config(project_root / "config" / "channels.yaml"), channel_filter
     )
@@ -254,7 +254,7 @@ def build_agentscope_app(
 
     pipeline = FullPipeline(
         channel_researcher=ChannelResearchAgent(),
-        topic_extractor=SingleShotTopicExtractorAgent(model=model),
+        topic_extractor=SingleShotTopicExtractorAgent(**model_config),
         hook_analyzer=HookAnalyzerAgent(),
         performance_correlator=PerformanceCorrelatorAgent(),
         gap_detector=GapDetectorAgent(),

@@ -3,25 +3,24 @@
 Agent 1 (Channel Researcher) runs deterministically — segmentation and
 language detection are algorithmic and don't benefit from LLM reasoning.
 
-Agent 2 (Topic Extractor) makes ONE Claude call to extend the regex
-baseline with topics the LLM recognises but the taxonomy doesn't cover.
-Total: 1 Claude call per video instead of 11.
+Agent 2 (Topic Extractor) makes ONE Anthropic API call to extend the
+regex baseline with topics the LLM recognises but the taxonomy doesn't cover.
+Total: 1 API call per video instead of 11.
 
 Activate via: python run.py --agentscope (requires ANTHROPIC_API_KEY)
 Requires:     pip install 'acis[agents]'
 """
 from __future__ import annotations
 
-import asyncio
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
 try:
     import agentscope
-    from agentscope.message import Msg
-    from agentscope.model import AnthropicChatModel
+    from agentscope.model import AnthropicChatModel  # noqa: F401 — kept for init_agentscope
 except ImportError as _err:
     raise ImportError(
         "AgentScope is required for this module: pip install 'acis[agents]'"
@@ -40,26 +39,24 @@ _MAX_TRANSCRIPT_CHARS = 4000
 
 @dataclass(slots=True)
 class SingleShotTopicExtractorAgent:
-    """Agent 2: one Claude call extends regex-detected topics with LLM knowledge.
+    """Agent 2: one Anthropic API call extends regex-detected topics with LLM knowledge.
 
     Runs deterministic TopicExtractorAgent first to get a baseline, then asks
     Claude once to add any topics it recognises that the regex missed.
-    Falls back to the baseline silently on any API or parse error.
+    Falls back to the baseline on any API or parse error.
 
     Requires: pip install 'acis[agents]'
     """
 
     agent_id: str = "agent_2_topic_extractor"
-    model: Any = field(default=None)
+    model_name: str = "claude-sonnet-4-6"
+    api_key: str | None = None
 
     def run(self, node: ChannelResearchNode) -> SemanticGraphUpdate:
         """One Claude call on top of the deterministic baseline."""
         from acis.agents.topic_extractor import TopicExtractorAgent  # noqa: PLC0415
 
         baseline = TopicExtractorAgent(agent_id=self.agent_id).run(node)
-
-        if self.model is None:
-            return baseline
 
         combined_text = " ".join([
             node.segments["hook"].text,
@@ -82,10 +79,17 @@ class SingleShotTopicExtractorAgent:
         )
 
         try:
-            response = asyncio.run(
-                self.model([Msg(name="user", role="user", content=prompt)])
+            import anthropic  # noqa: PLC0415
+            client = anthropic.Anthropic(
+                api_key=self.api_key or os.environ.get("ANTHROPIC_API_KEY")
             )
-            additions = _parse_json(_extract_text(response))
+            response = client.messages.create(
+                model=self.model_name,
+                max_tokens=512,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = response.content[0].text
+            additions = _parse_json(text)
         except Exception as exc:
             print(f"  ⚠ {node.video_id}: Agent 2 LLM failed ({exc!s:.100}) — using baseline")
             return baseline
@@ -125,21 +129,6 @@ def _merge(base: list[str], additions: list[str]) -> list[str]:
     return base + [t for t in additions if isinstance(t, str) and t.lower() not in seen]
 
 
-def _extract_text(response: Any) -> str:
-    """Extract plain text string from an AgentScope ModelResponse."""
-    if hasattr(response, "text"):
-        return response.text
-    if hasattr(response, "content"):
-        c = response.content
-        if isinstance(c, str):
-            return c
-        if isinstance(c, list):
-            return " ".join(
-                b.get("text", "") if isinstance(b, dict) else str(b) for b in c
-            )
-    return str(response)
-
-
 def _parse_json(text: str) -> dict:
     """Parse JSON from model output, tolerating markdown code fences."""
     text = text.strip()
@@ -157,12 +146,12 @@ def _parse_json(text: str) -> dict:
 def init_agentscope(
     model_name: str = "claude-sonnet-4-6",
     api_key: str | None = None,
-) -> Any:
-    """Initialise AgentScope and return an AnthropicChatModel for SingleShotTopicExtractorAgent.
+) -> dict[str, Any]:
+    """Initialise AgentScope and return model config for SingleShotTopicExtractorAgent.
 
     Args:
         model_name: Anthropic model identifier (default: 'claude-sonnet-4-6').
         api_key: Anthropic API key; omit to read from ANTHROPIC_API_KEY env var.
     """
     agentscope.init(project="acis")
-    return AnthropicChatModel(model_name=model_name, api_key=api_key)
+    return {"model_name": model_name, "api_key": api_key}

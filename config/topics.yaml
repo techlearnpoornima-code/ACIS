@@ -209,3 +209,9 @@ emergent:
   - \bglm\b
   GPT:
   - \bgpt\b
+  HTTP:
+  - \bhttp\b
+  LinkedIn:
+  - \blinkedin\b
+  YouTube:
+  - \byoutube\b
