@@ -225,17 +225,24 @@ class ReActChannelResearchAgent:
             max_iters=self.max_iters,
         )
 
-        asyncio.run(agent(Msg(
-            name="user",
-            role="user",
-            content=(
-                f"Analyse this video:\n"
-                f"video_id: {payload.metadata.video_id}\n"
-                f"title: {payload.metadata.title}\n"
-                f"duration_seconds: {payload.metadata.duration_seconds}\n\n"
-                f"Call the tools in order — they already have access to the transcript data."
-            ),
-        )))
+        try:
+            asyncio.run(agent(Msg(
+                name="user",
+                role="user",
+                content=(
+                    f"Analyse this video:\n"
+                    f"video_id: {payload.metadata.video_id}\n"
+                    f"title: {payload.metadata.title}\n"
+                    f"duration_seconds: {payload.metadata.duration_seconds}\n\n"
+                    f"Call the tools in order — they already have access to the transcript data."
+                ),
+            )))
+        except Exception as exc:
+            print(
+                f"  ⚠ {payload.metadata.video_id}: Agent 1 ReAct error ({exc!s:.120}) "
+                f"— falling back to deterministic pipeline"
+            )
+            return self._fallback(payload)
 
         if self._result is None:
             print(
@@ -388,15 +395,22 @@ class ReActTopicExtractorAgent:
             max_iters=self.max_iters,
         )
 
-        asyncio.run(agent(Msg(
-            name="user",
-            role="user",
-            content=(
-                f"Extract topics for video '{node.video_id}' — title: {node.title!r}.\n\n"
-                f"Transcript text:\n{combined_text}\n\n"
-                f"Call the tools in order — they already have access to the research node data."
-            ),
-        )))
+        try:
+            asyncio.run(agent(Msg(
+                name="user",
+                role="user",
+                content=(
+                    f"Extract topics for video '{node.video_id}' — title: {node.title!r}.\n\n"
+                    f"Transcript text:\n{combined_text}\n\n"
+                    f"Call the tools in order — they already have access to the research node data."
+                ),
+            )))
+        except Exception as exc:
+            print(
+                f"  ⚠ {node.video_id}: Agent 2 ReAct error ({exc!s:.120}) "
+                f"— falling back to deterministic pipeline"
+            )
+            return self._fallback(node)
 
         if self._result is None:
             print(
