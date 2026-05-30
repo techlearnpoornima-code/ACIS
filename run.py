@@ -10,6 +10,7 @@ try:
 except ImportError:
     pass  # python-dotenv not installed; rely on env vars being set externally
 
+from acis.report import generate_html_report
 from acis.runner import (
     build_agentscope_app,
     build_full_sample_app,
@@ -172,6 +173,10 @@ def main() -> None:
                 f"White-space opportunities detected: "
                 f"{len(summary.opportunity_vector.opportunities)}"
             )
+
+    report_path = output_path.parent / "report.html"
+    generate_html_report(summary, report_path)
+    print(f"HTML dashboard:  {report_path}")
 
 
 if __name__ == "__main__":
