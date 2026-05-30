@@ -1,448 +1,155 @@
-"""AgentScope ReActAgent implementations for ACIS Agent 1 and Agent 2.
+"""AgentScope single-shot LLM topic extraction for ACIS Agent 2.
 
-These are opt-in alternatives to the plain Python agents in agents/.
-The LLM reasons over tool calls in the ReAct loop instead of following a
-fixed deterministic pipeline. Both agents fall back gracefully to the
-deterministic implementation if the LLM fails to call the finalise tool
-within max_iters.
+Agent 1 (Channel Researcher) runs deterministically — segmentation and
+language detection are algorithmic and don't benefit from LLM reasoning.
 
-Activate via: python run.py --agentscope (requires ANTHROPIC_API_KEY).
+Agent 2 (Topic Extractor) makes ONE Claude call to extend the regex
+baseline with topics the LLM recognises but the taxonomy doesn't cover.
+Total: 1 Claude call per video instead of 11.
+
+Activate via: python run.py --agentscope (requires ANTHROPIC_API_KEY)
 Requires:     pip install 'acis[agents]'
 """
 from __future__ import annotations
 
 import asyncio
 import json
-import time
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
 try:
     import agentscope
-    from agentscope.agent import ReActAgent
-    from agentscope.formatter import AnthropicChatFormatter
-    from agentscope.message import Msg, TextBlock
+    from agentscope.message import Msg
     from agentscope.model import AnthropicChatModel
-    from agentscope.tool import Toolkit, ToolResponse
 except ImportError as _err:
     raise ImportError(
         "AgentScope is required for this module: pip install 'acis[agents]'"
     ) from _err
 
-from acis.models import (
-    ChannelResearchNode,
-    IngestionPayload,
-    SemanticGraphUpdate,
-    TextWindow,
-    TranscriptSegment,
-)
+from acis.models import ChannelResearchNode, SemanticGraphUpdate
 from acis.tools import (
     build_topic_pairs as _build_topic_pairs,
     compute_salience as _compute_salience,
     compute_tf as _compute_tf,
-    detect_language as _detect_language,
-    extract_monetisation_signals as _extract_monetisation_signals,
-    extract_topics as _extract_topics,
-    normalise_metadata,
-    segment_transcript as _segment_transcript,
-    validate_transcript_completeness as _validate_completeness,
-    word_count as _word_count,
-    words_per_minute as _words_per_minute,
 )
 
-# ── System prompts ─────────────────────────────────────────────────────────────
+# Transcript characters sent to Claude — keeps prompt within token budget
+_MAX_TRANSCRIPT_CHARS = 4000
 
-_AGENT1_SYS_PROMPT = """\
-You are Agent 1 — Channel Research Agent for ACIS (Autonomous Creator Intelligence System).
-
-Call the tools in this exact order. Steps 1–4 take NO arguments — they operate on the
-video already loaded:
-
-  1. segment_transcript()               — splits transcript into hook / body / outro windows
-  2. detect_language()                  — identifies the language (ISO 639-1 code)
-  3. count_words()                      — counts total words in the transcript
-  4. get_transcript_completeness()      — fraction (0.0–1.0) of video duration covered
-  5. finalise_research(                 — MUST be called last
-       transcript_completeness,         — float returned by step 4
-       language,                        — string returned by step 2
-       n_words,                         — integer returned by step 3
-       n_words_per_minute,              — compute: round(n_words / (duration_seconds / 60))
-     )
-
-Rules:
-- Call each tool exactly once, in order.
-- Steps 1–4 take NO arguments — do not pass any input.
-- Do not fabricate any values; use only what the tools return.
-- If completeness < 0.6, note the low coverage before finalising.
-"""
-
-_AGENT2_SYS_PROMPT = """\
-You are Agent 2 — Topic Extractor Agent for ACIS (Autonomous Creator Intelligence System).
-
-Call the tools in this exact order — steps 1, 2, and 7 take NO arguments:
-
-  1. extract_topics_by_pattern()        — regex taxonomy match; returns base topic lists
-  2. extract_monetisation_signals()     — detects course plugs, retainer offers, etc.
-  3. Review the transcript text. Merge any additional topics you are confident about into
-     the four category lists. Only add topics genuinely present — do not guess.
-  4. compute_topic_salience(topics_json)   — topics_json = merged JSON from steps 1+3
-  5. compute_topic_tf(topics_json)         — same topics_json
-  6. build_topic_pairs(topics_json)        — same topics_json
-  7. finalise_semantic_graph()             — MUST be called last; NO arguments needed
-
-Rules:
-- Steps 1, 2, and 7 take NO arguments — do not pass any input to them.
-- topics_json must be a JSON object: '{"technical_tools":[...],"architectures":[...],"use_cases":[...],"business_models":[...]}'
-- Do not fabricate salience scores or TF values — use only what the tools return.
-"""
-
-# ── Serialisation helpers ──────────────────────────────────────────────────────
-
-def _payload_to_msg_content(payload: IngestionPayload) -> str:
-    """Serialise an IngestionPayload to the JSON string passed as the initial agent Msg."""
-    meta = normalise_metadata(payload)
-    return json.dumps({
-        "video_id": meta["video_id"],
-        "title": meta["title"],
-        "duration_seconds": meta["duration_seconds"],
-        "full_text": payload.full_text,
-        "segments": [
-            {"start": s.start, "duration": s.duration, "text": s.text}
-            for s in payload.transcript_segments
-        ],
-    }, ensure_ascii=False)
-
-
-def _node_from_dict(data: dict[str, Any]) -> ChannelResearchNode:
-    """Reconstruct a ChannelResearchNode from its to_dict() representation."""
-    segments = {
-        k: TextWindow(text=v["text"], duration_seconds=v["duration_seconds"])
-        for k, v in data["segments"].items()
-    }
-    return ChannelResearchNode(
-        video_id=data["video_id"],
-        channel_id=data["channel_id"],
-        title=data["title"],
-        transcript_completeness=data["transcript_completeness"],
-        transcript_source=data["transcript_source"],
-        language=data["language"],
-        word_count=data["word_count"],
-        words_per_minute=data["words_per_minute"],
-        segments=segments,
-        metadata=data["metadata"],
-    )
-
-
-def _text_response(data: Any) -> ToolResponse:
-    """Wrap a JSON-serialisable value in a ToolResponse with a single TextBlock."""
-    return ToolResponse(content=[TextBlock(type="text", text=json.dumps(data))])
-
-
-# ── Agent 1 ───────────────────────────────────────────────────────────────────
 
 @dataclass(slots=True)
-class ReActChannelResearchAgent:
-    """Agent 1 via AgentScope ReActAgent — LLM coordinates deterministic transcript tools.
+class SingleShotTopicExtractorAgent:
+    """Agent 2: one Claude call extends regex-detected topics with LLM knowledge.
 
-    Requires: pip install 'acis[agents]'
-    """
-
-    agent_id: str = "agent_1_channel_researcher"
-    model: Any = field(default=None)  # AnthropicChatModel instance from init_agentscope()
-    max_iters: int = 8
-    # Written by the finalise_research tool closure; read after agent completes
-    _result: dict[str, Any] | None = field(default=None, init=False, repr=False)
-
-    def _build_toolkit(self, payload: IngestionPayload):
-        toolkit = Toolkit()
-        agent_self = self
-        _state: dict = {}  # shared mutable state across closures
-
-        def segment_transcript():
-            """Split transcript into hook (0-60s), body (60-80%), and outro windows. No arguments needed."""
-            result = _segment_transcript(payload.transcript_segments, payload.metadata.duration_seconds)
-            _state["segments"] = {
-                k: {"text": v.text, "duration_seconds": v.duration_seconds}
-                for k, v in result.items()
-            }
-            return _text_response(_state["segments"])
-
-        def detect_language():
-            """Detect the primary language of the transcript. Returns an ISO 639-1 language code. No arguments needed."""
-            return _text_response({"language": _detect_language(payload.full_text)})
-
-        def count_words():
-            """Count the number of words in the transcript. No arguments needed."""
-            return _text_response({"word_count": _word_count(payload.full_text)})
-
-        def get_transcript_completeness():
-            """Compute what fraction (0.0–1.0) of the video duration is covered by transcript. No arguments needed."""
-            return _text_response({
-                "transcript_completeness": _validate_completeness(
-                    payload.transcript_segments, payload.metadata.duration_seconds
-                )
-            })
-
-        def finalise_research(
-            transcript_completeness: float = 0.0,
-            language: str = "en",
-            n_words: int = 0,
-            n_words_per_minute: int = 0,
-        ):
-            """Complete Agent 1. Call LAST with scalar values from the tools above.
-
-            Args:
-                transcript_completeness: Float 0.0–1.0 from get_transcript_completeness.
-                language: Language code string from detect_language.
-                n_words: Integer word count from count_words.
-                n_words_per_minute: Compute as round(n_words / (duration_seconds / 60)).
-            """
-            agent_self._result = {
-                "transcript_completeness": transcript_completeness,
-                "language": language,
-                "word_count": n_words,
-                "words_per_minute": n_words_per_minute,
-                "segments": _state.get("segments", {}),
-            }
-            return _text_response({"status": "ChannelResearchNode finalised"})
-
-        for fn in (segment_transcript, detect_language, count_words,
-                   get_transcript_completeness, finalise_research):
-            toolkit.register_tool_function(fn)
-        return toolkit
-
-    def run(self, payload: IngestionPayload) -> ChannelResearchNode:
-        """Run Agent 1 via ReActAgent; falls back to deterministic pipeline on any failure."""
-        self._result = None
-        meta = normalise_metadata(payload)
-
-        agent = ReActAgent(
-            name="ChannelResearcher",
-            sys_prompt=_AGENT1_SYS_PROMPT,
-            model=self.model,
-            formatter=AnthropicChatFormatter(),
-            toolkit=self._build_toolkit(payload),
-            max_iters=self.max_iters,
-        )
-
-        msg = Msg(
-            name="user",
-            role="user",
-            content=(
-                f"Analyse this video:\n"
-                f"video_id: {payload.metadata.video_id}\n"
-                f"title: {payload.metadata.title}\n"
-                f"duration_seconds: {payload.metadata.duration_seconds}\n\n"
-                f"Call the tools in order — they already have access to the transcript data."
-            ),
-        )
-        for attempt in range(2):
-            try:
-                asyncio.run(agent(msg))
-                break
-            except Exception as exc:
-                is_rate_limit = "429" in str(exc) or "rate_limit" in str(exc)
-                if is_rate_limit and attempt == 0:
-                    print(f"  ⚠ {payload.metadata.video_id}: Agent 1 rate-limited — retrying in 60s")
-                    time.sleep(60)
-                    continue
-                print(
-                    f"  ⚠ {payload.metadata.video_id}: Agent 1 ReAct error ({exc!s:.120}) "
-                    f"— falling back to deterministic pipeline"
-                )
-                return self._fallback(payload)
-
-        if self._result is None:
-            print(
-                f"  ⚠ {payload.metadata.video_id}: Agent 1 ReAct did not call "
-                f"finalise_research — falling back to deterministic pipeline"
-            )
-            return self._fallback(payload)
-
-        r = self._result
-        if r["transcript_completeness"] < 0.6:
-            print(
-                f"  ⚠ {payload.metadata.video_id}: low transcript coverage "
-                f"({r['transcript_completeness']:.0%}) — topic extraction may be incomplete"
-            )
-        return ChannelResearchNode(
-            video_id=payload.metadata.video_id,
-            channel_id=payload.metadata.channel_id,
-            title=payload.metadata.title,
-            transcript_completeness=r["transcript_completeness"],
-            transcript_source=payload.metadata.transcript_source,
-            language=r["language"],
-            word_count=r["word_count"],
-            words_per_minute=r["words_per_minute"],
-            segments={
-                k: TextWindow(text=v["text"], duration_seconds=v["duration_seconds"])
-                for k, v in r["segments"].items()
-            },
-            metadata=meta,
-        )
-
-    def _fallback(self, payload: IngestionPayload) -> ChannelResearchNode:
-        from acis.agents.channel_researcher import ChannelResearchAgent  # noqa: PLC0415
-        return ChannelResearchAgent(agent_id=self.agent_id).run(payload)
-
-
-# ── Agent 2 ───────────────────────────────────────────────────────────────────
-
-@dataclass(slots=True)
-class ReActTopicExtractorAgent:
-    """Agent 2 via AgentScope ReActAgent — LLM extends regex patterns with its own topic knowledge.
+    Runs deterministic TopicExtractorAgent first to get a baseline, then asks
+    Claude once to add any topics it recognises that the regex missed.
+    Falls back to the baseline silently on any API or parse error.
 
     Requires: pip install 'acis[agents]'
     """
 
     agent_id: str = "agent_2_topic_extractor"
-    model: Any = field(default=None)  # AnthropicChatModel instance from init_agentscope()
-    max_iters: int = 12
-    _result: dict[str, Any] | None = field(default=None, init=False, repr=False)
-
-    def _build_toolkit(self, node: ChannelResearchNode):
-        toolkit = Toolkit()
-        agent_self = self
-        combined_text = " ".join([
-            node.segments["hook"].text,
-            node.segments["body"].text,
-            node.segments["outro"].text,
-        ])
-        _state: dict = {}  # shared mutable state — each tool stores its result here
-
-        def extract_topics_by_pattern():
-            """Match transcript text against TOPIC_PATTERNS regexes. Returns known topics per category. No arguments needed."""
-            result = _extract_topics(node)
-            _state["topics"] = result
-            return _text_response(result)
-
-        def extract_monetisation_signals():
-            """Identify course plugs, consulting offers, retainer mentions, and cohort offers. No arguments needed."""
-            signals = _extract_monetisation_signals(combined_text)
-            _state["monetisation_refs"] = signals
-            return _text_response({"signals": signals})
-
-        def compute_topic_salience(topics_json: str):
-            """Score each topic using log-normalised TF × coverage ratio within this video.
-
-            Args:
-                topics_json: JSON object string — '{"technical_tools":[...],"architectures":[...],"use_cases":[...],"business_models":[...]}'
-            """
-            topics = json.loads(topics_json)
-            _state["merged_topics"] = topics
-            salience = _compute_salience(node, topics)
-            _state["salience_scores"] = salience
-            return _text_response(salience)
-
-        def compute_topic_tf(topics_json: str):
-            """Compute raw per-video TF for each topic.
-
-            Args:
-                topics_json: JSON object string — same format as compute_topic_salience.
-            """
-            topics = json.loads(topics_json)
-            tf = _compute_tf(node, topics)
-            _state["tf_scores"] = tf
-            return _text_response(tf)
-
-        def build_topic_pairs(topics_json: str):
-            """Build all unique co-occurrence pairs across topic categories for graph edges.
-
-            Args:
-                topics_json: JSON object string — same format as compute_topic_salience.
-            """
-            topics = json.loads(topics_json)
-            pairs = _build_topic_pairs(topics)
-            _state["topic_pairs"] = pairs
-            return _text_response({"pairs": [list(p) for p in pairs]})
-
-        def finalise_semantic_graph():
-            """Complete Agent 2. Call LAST — reads all stored tool results automatically. NO arguments needed."""
-            merged = _state.get("merged_topics", _state.get("topics", {}))
-            agent_self._result = {
-                "technical_tools": merged.get("technical_tools", []),
-                "architectures": merged.get("architectures", []),
-                "use_cases": merged.get("use_cases", []),
-                "business_models": merged.get("business_models", []),
-                "monetisation_refs": _state.get("monetisation_refs", []),
-                "salience_scores": _state.get("salience_scores", {}),
-                "tf_scores": _state.get("tf_scores", {}),
-                "topic_pairs": [list(p) for p in _state.get("topic_pairs", [])],
-            }
-            return _text_response({"status": "SemanticGraphUpdate finalised"})
-
-        for fn in (extract_topics_by_pattern, extract_monetisation_signals,
-                   compute_topic_salience, compute_topic_tf,
-                   build_topic_pairs, finalise_semantic_graph):
-            toolkit.register_tool_function(fn)
-        return toolkit
+    model: Any = field(default=None)
 
     def run(self, node: ChannelResearchNode) -> SemanticGraphUpdate:
-        """Run Agent 2 via ReActAgent; falls back to deterministic pipeline on any failure."""
-        self._result = None
+        """One Claude call on top of the deterministic baseline."""
+        from acis.agents.topic_extractor import TopicExtractorAgent  # noqa: PLC0415
+
+        baseline = TopicExtractorAgent(agent_id=self.agent_id).run(node)
+
+        if self.model is None:
+            return baseline
+
         combined_text = " ".join([
             node.segments["hook"].text,
             node.segments["body"].text,
             node.segments["outro"].text,
         ])
 
-        agent = ReActAgent(
-            name="TopicExtractor",
-            sys_prompt=_AGENT2_SYS_PROMPT,
-            model=self.model,
-            formatter=AnthropicChatFormatter(),
-            toolkit=self._build_toolkit(node),
-            max_iters=self.max_iters,
+        prompt = (
+            f"You are analysing a YouTube video for an AI creator channel.\n"
+            f"Title: {node.title}\n\n"
+            f"Transcript (first {_MAX_TRANSCRIPT_CHARS} chars):\n"
+            f"{combined_text[:_MAX_TRANSCRIPT_CHARS]}\n\n"
+            f"Regex detection already found:\n"
+            f"{json.dumps({'technical_tools': baseline.technical_tools, 'architectures': baseline.architectures, 'use_cases': baseline.use_cases, 'business_models': baseline.business_models}, indent=2)}\n\n"
+            f"Add any additional topics you are CONFIDENT are genuinely discussed. "
+            f"Do NOT repeat topics already listed above.\n"
+            f"Return ONLY a JSON object — no markdown, no explanation:\n"
+            f'{{"technical_tools": [...], "architectures": [...], '
+            f'"use_cases": [...], "business_models": [...]}}'
         )
 
-        msg = Msg(
-            name="user",
-            role="user",
-            content=(
-                f"Extract topics for video '{node.video_id}' — title: {node.title!r}.\n\n"
-                f"Transcript text:\n{combined_text}\n\n"
-                f"Call the tools in order — they already have access to the research node data."
-            ),
-        )
-        for attempt in range(2):
-            try:
-                asyncio.run(agent(msg))
-                break
-            except Exception as exc:
-                is_rate_limit = "429" in str(exc) or "rate_limit" in str(exc)
-                if is_rate_limit and attempt == 0:
-                    print(f"  ⚠ {node.video_id}: Agent 2 rate-limited — retrying in 60s")
-                    time.sleep(60)
-                    continue
-                print(
-                    f"  ⚠ {node.video_id}: Agent 2 ReAct error ({exc!s:.120}) "
-                    f"— falling back to deterministic pipeline"
-                )
-                return self._fallback(node)
-
-        if self._result is None:
-            print(
-                f"  ⚠ {node.video_id}: Agent 2 ReAct did not call "
-                f"finalise_semantic_graph — falling back to deterministic pipeline"
+        try:
+            response = asyncio.run(
+                self.model([Msg(name="user", role="user", content=prompt)])
             )
-            return self._fallback(node)
+            additions = _parse_json(_extract_text(response))
+        except Exception as exc:
+            print(f"  ⚠ {node.video_id}: Agent 2 LLM failed ({exc!s:.100}) — using baseline")
+            return baseline
 
-        r = self._result
+        merged = {
+            "technical_tools": _merge(baseline.technical_tools, additions.get("technical_tools", [])),
+            "architectures":    _merge(baseline.architectures,   additions.get("architectures", [])),
+            "use_cases":        _merge(baseline.use_cases,       additions.get("use_cases", [])),
+            "business_models":  _merge(baseline.business_models, additions.get("business_models", [])),
+        }
+        added_count = sum(
+            len(merged[k]) - len(getattr(baseline, k))
+            for k in ("technical_tools", "architectures", "use_cases", "business_models")
+        )
+        if added_count:
+            print(f"    ✓ {node.video_id}: Agent 2 LLM added {added_count} topic(s) to baseline")
+
         return SemanticGraphUpdate(
             video_id=node.video_id,
-            technical_tools=r.get("technical_tools", []),
-            architectures=r.get("architectures", []),
-            use_cases=r.get("use_cases", []),
-            business_models=r.get("business_models", []),
-            monetisation_refs=r.get("monetisation_refs", []),
-            salience_scores=r.get("salience_scores", {}),
-            tf_scores=r.get("tf_scores", {}),
-            topic_pairs=[tuple(p) for p in r.get("topic_pairs", [])],
+            technical_tools=merged["technical_tools"],
+            architectures=merged["architectures"],
+            use_cases=merged["use_cases"],
+            business_models=merged["business_models"],
+            monetisation_refs=baseline.monetisation_refs,
+            salience_scores=_compute_salience(node, merged),
+            tf_scores=_compute_tf(node, merged),
+            topic_pairs=_build_topic_pairs(merged),
+            emergent_topics=baseline.emergent_topics,
         )
 
-    def _fallback(self, node: ChannelResearchNode) -> SemanticGraphUpdate:
-        from acis.agents.topic_extractor import TopicExtractorAgent  # noqa: PLC0415
-        return TopicExtractorAgent(agent_id=self.agent_id).run(node)
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _merge(base: list[str], additions: list[str]) -> list[str]:
+    """Return base + new items from additions, deduplicated case-insensitively."""
+    seen = {t.lower() for t in base}
+    return base + [t for t in additions if isinstance(t, str) and t.lower() not in seen]
+
+
+def _extract_text(response: Any) -> str:
+    """Extract plain text string from an AgentScope ModelResponse."""
+    if hasattr(response, "text"):
+        return response.text
+    if hasattr(response, "content"):
+        c = response.content
+        if isinstance(c, str):
+            return c
+        if isinstance(c, list):
+            return " ".join(
+                b.get("text", "") if isinstance(b, dict) else str(b) for b in c
+            )
+    return str(response)
+
+
+def _parse_json(text: str) -> dict:
+    """Parse JSON from model output, tolerating markdown code fences."""
+    text = text.strip()
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if fence:
+        text = fence.group(1).strip()
+    start, end = text.find("{"), text.rfind("}") + 1
+    if start >= 0 and end > start:
+        text = text[start:end]
+    return json.loads(text)
 
 
 # ── Initialisation ─────────────────────────────────────────────────────────────
@@ -451,10 +158,7 @@ def init_agentscope(
     model_name: str = "claude-sonnet-4-6",
     api_key: str | None = None,
 ) -> Any:
-    """Initialise AgentScope and return an AnthropicChatModel instance for both ReActAgents.
-
-    Call once per process. Pass the returned model to ReActChannelResearchAgent and
-    ReActTopicExtractorAgent via their model= constructor argument.
+    """Initialise AgentScope and return an AnthropicChatModel for SingleShotTopicExtractorAgent.
 
     Args:
         model_name: Anthropic model identifier (default: 'claude-sonnet-4-6').

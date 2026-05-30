@@ -188,8 +188,7 @@ def build_agentscope_app(
     """
     try:
         from acis.agents.agentscope import (  # noqa: PLC0415
-            ReActChannelResearchAgent,
-            ReActTopicExtractorAgent,
+            SingleShotTopicExtractorAgent,
             init_agentscope,
         )
     except ImportError as exc:
@@ -254,8 +253,8 @@ def build_agentscope_app(
             memory_store.load()
 
     pipeline = FullPipeline(
-        channel_researcher=ReActChannelResearchAgent(model=model),
-        topic_extractor=ReActTopicExtractorAgent(model=model),
+        channel_researcher=ChannelResearchAgent(),
+        topic_extractor=SingleShotTopicExtractorAgent(model=model),
         hook_analyzer=HookAnalyzerAgent(),
         performance_correlator=PerformanceCorrelatorAgent(),
         gap_detector=GapDetectorAgent(),
