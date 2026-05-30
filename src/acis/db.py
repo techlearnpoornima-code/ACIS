@@ -25,6 +25,38 @@ class DatabaseRepository:
             ) from exc
         self._engine = create_engine(self.db_url)
 
+    def get_cached_transcript(self, video_id: str) -> tuple[list, str] | None:
+        """Return (segments, source) from transcript_cache, or None if not cached."""
+        from sqlalchemy import text  # noqa: PLC0415
+        from acis.models import TranscriptSegment  # noqa: PLC0415
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT segments_json, source FROM transcript_cache WHERE video_id = :vid"),
+                {"vid": video_id},
+            ).fetchone()
+        if row is None:
+            return None
+        segments = [TranscriptSegment(**s) for s in row[0]]
+        return segments, row[1]
+
+    def save_transcript_cache(self, video_id: str, segments: list, source: str) -> None:
+        """Persist raw transcript segments so future runs skip the YouTube API call."""
+        from sqlalchemy import text  # noqa: PLC0415
+        segs_json = json.dumps(
+            [{"start": s.start, "duration": s.duration, "text": s.text} for s in segments]
+        )
+        with self._engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO transcript_cache (video_id, segments_json, source) "
+                    "VALUES (:vid, :segs::jsonb, :src) "
+                    "ON CONFLICT (video_id) DO UPDATE SET "
+                    "segments_json = EXCLUDED.segments_json, source = EXCLUDED.source, "
+                    "fetched_at = NOW()"
+                ),
+                {"vid": video_id, "segs": segs_json, "src": source},
+            )
+
     def get_ingested_video_ids(self) -> set[str]:
         from sqlalchemy import text  # noqa: PLC0415
         with self._engine.connect() as conn:

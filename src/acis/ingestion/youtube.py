@@ -56,6 +56,8 @@ class YouTubeIngestionClient(IngestionClient):
     thumbnail_dir: Path | None = field(default=None)
     # Seconds to wait between transcript requests — keeps rate under YouTube's limit (~1 req/sec)
     transcript_delay: float = field(default=1.5)
+    # Optional DatabaseRepository — when set, transcripts are cached and reused across runs
+    transcript_repo: object | None = field(default=None)
     _youtube: object = field(default=None, init=False, repr=False)
     _channel_id_cache: dict[str, str] = field(default_factory=dict, init=False, repr=False)
     _skipped_count: int = field(default=0, init=False, repr=False)
@@ -167,6 +169,14 @@ class YouTubeIngestionClient(IngestionClient):
             return [], "error"
 
     def _fetch_transcript(self, video_id: str) -> tuple[list[TranscriptSegment], str]:
+        # Check transcript cache before hitting YouTube
+        if self.transcript_repo is not None:
+            cached = self.transcript_repo.get_cached_transcript(video_id)
+            if cached is not None:
+                segments, source = cached
+                print(f"    ↩ {video_id}: transcript from cache ({len(segments)} segments, source={source})")
+                return segments, source
+
         try:
             from youtube_transcript_api import (  # noqa: PLC0415
                 NoTranscriptFound,
@@ -182,6 +192,9 @@ class YouTubeIngestionClient(IngestionClient):
         if self.transcript_delay > 0:
             time.sleep(self.transcript_delay)
 
+        segments: list[TranscriptSegment] = []
+        source = "unavailable"
+
         try:
             fetched = YouTubeTranscriptApi().fetch(video_id, languages=["en"])
             segments = [
@@ -192,20 +205,28 @@ class YouTubeIngestionClient(IngestionClient):
                 )
                 for entry in fetched
             ]
-            return segments, "api"
+            source = "api"
         except (TranscriptsDisabled, NoTranscriptFound):
             pass  # expected: transcript not available for this video
         except Exception as exc:
             print(f"  ⚠ {video_id}: transcript fetch error — {exc}")
 
         # Whisper fallback when an endpoint is configured
-        if self.whisper_endpoint:
+        if source == "unavailable" and self.whisper_endpoint:
             try:
-                return self._fetch_transcript_whisper(video_id), "whisper"
+                segments = self._fetch_transcript_whisper(video_id)
+                source = "whisper"
             except Exception as exc:
                 print(f"  ⚠ {video_id}: Whisper fallback failed — {exc}")
 
-        return [], "unavailable"
+        # Save to cache for future runs (including --force-reprocess)
+        if self.transcript_repo is not None and source != "unavailable":
+            try:
+                self.transcript_repo.save_transcript_cache(video_id, segments, source)
+            except Exception as exc:
+                print(f"  ⚠ {video_id}: transcript cache write failed — {exc}")
+
+        return segments, source
 
     def _fetch_transcript_whisper(self, video_id: str) -> list[TranscriptSegment]:
         """Download audio via yt-dlp and POST to a Whisper HTTP endpoint for transcription."""

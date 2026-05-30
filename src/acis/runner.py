@@ -144,6 +144,7 @@ def build_live_app(
             api_key=api_key,
             ingested_video_ids=ingested_ids,
             transcript_delay=transcript_delay,
+            transcript_repo=repo,
         ),
     )
 
@@ -231,6 +232,7 @@ def build_agentscope_app(
                 api_key=yt_key,
                 ingested_video_ids=ingested_ids,
                 transcript_delay=transcript_delay,
+                transcript_repo=repo,
             )
         else:
             client = SampleIngestionClient(project_root / "data" / "sample_channels.json")
