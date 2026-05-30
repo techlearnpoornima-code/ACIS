@@ -26,18 +26,43 @@ class DatabaseRepository:
         self._engine = create_engine(self.db_url)
 
     def get_cached_transcript(self, video_id: str) -> tuple[list, str] | None:
-        """Return (segments, source) from transcript_cache, or None if not cached."""
+        """Return (segments, source) from transcript_cache or transcripts table, or None.
+
+        Checks transcript_cache first (raw segments). Falls back to the transcripts table
+        and reconstructs pseudo-segments from stored hook/body/outro text so videos
+        processed before transcript_cache existed don't trigger a YouTube API call.
+        """
         from sqlalchemy import text  # noqa: PLC0415
         from acis.models import TranscriptSegment  # noqa: PLC0415
+
         with self._engine.connect() as conn:
             row = conn.execute(
                 text("SELECT segments_json, source FROM transcript_cache WHERE video_id = :vid"),
                 {"vid": video_id},
             ).fetchone()
-        if row is None:
+            if row is not None:
+                segments = [TranscriptSegment(**s) for s in row[0]]
+                return segments, row[1]
+
+            row2 = conn.execute(
+                text(
+                    "SELECT hook_text, body_text, outro_text, source "
+                    "FROM transcripts WHERE video_id = :vid"
+                ),
+                {"vid": video_id},
+            ).fetchone()
+
+        if row2 is None or not any([row2[0], row2[1], row2[2]]):
             return None
-        segments = [TranscriptSegment(**s) for s in row[0]]
-        return segments, row[1]
+
+        # Reconstruct three segments matching the hook/body/outro split
+        segments = [
+            TranscriptSegment(start=0,   duration=60,  text=row2[0] or ""),
+            TranscriptSegment(start=60,  duration=300, text=row2[1] or ""),
+            TranscriptSegment(start=360, duration=60,  text=row2[2] or ""),
+        ]
+        print(f"    ↩ {video_id}: transcript from transcripts table (legacy cache)")
+        return segments, row2[3] or "api"
 
     def save_transcript_cache(self, video_id: str, segments: list, source: str) -> None:
         """Persist raw transcript segments so future runs skip the YouTube API call."""
