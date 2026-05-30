@@ -184,10 +184,10 @@ class ReActChannelResearchAgent:
             })
 
         def finalise_research(
-            transcript_completeness: float,
-            language: str,
-            n_words: int,
-            n_words_per_minute: int,
+            transcript_completeness: float = 0.0,
+            language: str = "en",
+            n_words: int = 0,
+            n_words_per_minute: int = 0,
         ):
             """Complete Agent 1. Call LAST with scalar values from the tools above.
 
@@ -338,14 +338,14 @@ class ReActTopicExtractorAgent:
             return _text_response({"pairs": [list(p) for p in pairs]})
 
         def finalise_semantic_graph(
-            technical_tools_json: str,
-            architectures_json: str,
-            use_cases_json: str,
-            business_models_json: str,
-            monetisation_refs_json: str,
-            salience_scores_json: str,
-            tf_scores_json: str,
-            topic_pairs_json: str,
+            technical_tools_json: str = "[]",
+            architectures_json: str = "[]",
+            use_cases_json: str = "[]",
+            business_models_json: str = "[]",
+            monetisation_refs_json: str = "[]",
+            salience_scores_json: str = "{}",
+            tf_scores_json: str = "{}",
+            topic_pairs_json: str = "[]",
         ):
             """Complete Agent 2. Call this LAST with all gathered values to finalise the SemanticGraphUpdate.
 
