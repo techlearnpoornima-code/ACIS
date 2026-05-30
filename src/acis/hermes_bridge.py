@@ -18,14 +18,20 @@ def _hermes_base_url() -> str:
     return os.environ.get("HERMES_BASE_URL", "").rstrip("/")
 
 
+# Per-process flags — set True after first failure to skip repeated network calls and warnings.
+_search_unavailable: bool = False
+_update_unavailable: bool = False
+
+
 def search_hermes_sessions(query: str) -> list[dict]:
     """FTS5 bridge: query past ACIS run outputs stored in the Hermes session index.
 
     Returns matching session summaries; empty list when Hermes is not configured or unreachable.
     Used by Agent 5 (Gap Detector) to check whether a gap topic was previously identified.
     """
+    global _search_unavailable  # noqa: PLW0603
     base_url = _hermes_base_url()
-    if not base_url:
+    if not base_url or _search_unavailable:
         return []
     try:
         import requests  # noqa: PLC0415
@@ -38,7 +44,8 @@ def search_hermes_sessions(query: str) -> list[dict]:
         resp.raise_for_status()
         return resp.json().get("results", [])
     except Exception as exc:
-        print(f"  ⚠ Hermes session search unavailable ({exc})")
+        _search_unavailable = True
+        print(f"  ⚠ Hermes unreachable — session search disabled for this run ({exc!s:.80})")
         return []
 
 
@@ -55,8 +62,9 @@ def update_hermes_memory(
     if not belief_deltas:
         return "_No belief updates this run._\n"
 
+    global _update_unavailable  # noqa: PLW0603
     base_url = _hermes_base_url()
-    if base_url:
+    if base_url and not _update_unavailable:
         try:
             import requests  # noqa: PLC0415
 
@@ -85,7 +93,8 @@ def update_hermes_memory(
             header = "**Hermes MEMORY.md updated via API:**\n"
             return (header + "\n".join(lines) + "\n") if lines else f"Hermes: {len(belief_deltas)} belief(s) submitted.\n"
         except Exception as exc:
-            print(f"  ⚠ Hermes memory update unavailable ({exc}) — falling back to local MEMORY.md")
+            _update_unavailable = True
+            print(f"  ⚠ Hermes unreachable — memory update falling back to local MEMORY.md ({exc!s:.80})")
 
     # Local MemoryStore fallback — used when HERMES_BASE_URL is unset or Hermes is unreachable
     from acis.memory import MemoryStore  # noqa: PLC0415
