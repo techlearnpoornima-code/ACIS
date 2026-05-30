@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -224,24 +225,32 @@ class ReActChannelResearchAgent:
             max_iters=self.max_iters,
         )
 
-        try:
-            asyncio.run(agent(Msg(
-                name="user",
-                role="user",
-                content=(
-                    f"Analyse this video:\n"
-                    f"video_id: {payload.metadata.video_id}\n"
-                    f"title: {payload.metadata.title}\n"
-                    f"duration_seconds: {payload.metadata.duration_seconds}\n\n"
-                    f"Call the tools in order — they already have access to the transcript data."
-                ),
-            )))
-        except Exception as exc:
-            print(
-                f"  ⚠ {payload.metadata.video_id}: Agent 1 ReAct error ({exc!s:.120}) "
-                f"— falling back to deterministic pipeline"
-            )
-            return self._fallback(payload)
+        msg = Msg(
+            name="user",
+            role="user",
+            content=(
+                f"Analyse this video:\n"
+                f"video_id: {payload.metadata.video_id}\n"
+                f"title: {payload.metadata.title}\n"
+                f"duration_seconds: {payload.metadata.duration_seconds}\n\n"
+                f"Call the tools in order — they already have access to the transcript data."
+            ),
+        )
+        for attempt in range(2):
+            try:
+                asyncio.run(agent(msg))
+                break
+            except Exception as exc:
+                is_rate_limit = "429" in str(exc) or "rate_limit" in str(exc)
+                if is_rate_limit and attempt == 0:
+                    print(f"  ⚠ {payload.metadata.video_id}: Agent 1 rate-limited — retrying in 60s")
+                    time.sleep(60)
+                    continue
+                print(
+                    f"  ⚠ {payload.metadata.video_id}: Agent 1 ReAct error ({exc!s:.120}) "
+                    f"— falling back to deterministic pipeline"
+                )
+                return self._fallback(payload)
 
         if self._result is None:
             print(
@@ -386,22 +395,30 @@ class ReActTopicExtractorAgent:
             max_iters=self.max_iters,
         )
 
-        try:
-            asyncio.run(agent(Msg(
-                name="user",
-                role="user",
-                content=(
-                    f"Extract topics for video '{node.video_id}' — title: {node.title!r}.\n\n"
-                    f"Transcript text:\n{combined_text}\n\n"
-                    f"Call the tools in order — they already have access to the research node data."
-                ),
-            )))
-        except Exception as exc:
-            print(
-                f"  ⚠ {node.video_id}: Agent 2 ReAct error ({exc!s:.120}) "
-                f"— falling back to deterministic pipeline"
-            )
-            return self._fallback(node)
+        msg = Msg(
+            name="user",
+            role="user",
+            content=(
+                f"Extract topics for video '{node.video_id}' — title: {node.title!r}.\n\n"
+                f"Transcript text:\n{combined_text}\n\n"
+                f"Call the tools in order — they already have access to the research node data."
+            ),
+        )
+        for attempt in range(2):
+            try:
+                asyncio.run(agent(msg))
+                break
+            except Exception as exc:
+                is_rate_limit = "429" in str(exc) or "rate_limit" in str(exc)
+                if is_rate_limit and attempt == 0:
+                    print(f"  ⚠ {node.video_id}: Agent 2 rate-limited — retrying in 60s")
+                    time.sleep(60)
+                    continue
+                print(
+                    f"  ⚠ {node.video_id}: Agent 2 ReAct error ({exc!s:.120}) "
+                    f"— falling back to deterministic pipeline"
+                )
+                return self._fallback(node)
 
         if self._result is None:
             print(

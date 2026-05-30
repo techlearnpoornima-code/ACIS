@@ -136,6 +136,17 @@ _EMERGENT_EXCLUSIONS: frozenset[str] = frozenset({
     "Business", "Company", "Team", "Client", "Project", "System", "Process",
     "Model", "Agent", "Platform", "Product", "Feature", "Update",
     "Hello", "Hey", "Thanks", "Please", "Actually", "Basically", "Literally",
+    # Numbers / pronouns that pass heuristic checks
+    "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+    "Your", "Our", "My", "Its", "Their", "His", "Her", "You", "They",
+    # Platforms / generic formats that are not trackable tools
+    "YouTube", "Twitter", "LinkedIn", "Instagram", "Facebook", "Reddit", "Google",
+    "PDF", "CSV", "JSON", "XML", "HTML", "CSS",
+    # Business / analytical frameworks (not software tools)
+    "SWOT", "OKR", "MVP", "GTM", "B2B", "B2C", "SOP",
+    # Common title/video noise words
+    "Ep", "Episode", "Series", "Mini", "Intro", "Outro",
+    "Pro", "Plus", "Max", "Ultra", "Premium",
 })
 
 

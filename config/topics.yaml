@@ -5,197 +5,207 @@
 # Use single quotes around patterns so backslashes are preserved literally.
 # Patterns are tested with re.search(), so partial matches work fine.
 #
-# Example — adding a new tool:
-#   NewTool:
-#     - '\bnew tool\b'
-#     - '\bnewt\b'
-
+# (The 'emergent' section is auto-populated by detect_emergent_topics.)
 technical_tools:
   Claude:
-    - '\bclaude\b'
+  - \bclaude\b
   Claude Code:
-    - '\bclaude code\b'
+  - \bclaude code\b
   GPT-4:
-    - '\bgpt-?4o?\b'
-    - '\bgpt4\b'
+  - \bgpt-?4o?\b
+  - \bgpt4\b
   Gemini:
-    - '\bgemini\b'
+  - \bgemini\b
   Cursor:
-    - '\bcursor\b(?! key)'
+  - \bcursor\b(?! key)
   Windsurf:
-    - '\bwindsurf\b'
+  - \bwindsurf\b
   GitHub Copilot:
-    - '\bcopilot\b'
-    - '\bgithub copilot\b'
+  - \bcopilot\b
+  - \bgithub copilot\b
   n8n:
-    - '\bn8n\b'
+  - \bn8n\b
   Zapier:
-    - '\bzapier\b'
+  - \bzapier\b
   Make:
-    - '\bmake\.com\b'
-    - '\bintegromat\b'
-    - '\bmake automation\b'
+  - \bmake\.com\b
+  - \bintegromat\b
+  - \bmake automation\b
   LangChain:
-    - '\blangchain\b'
+  - \blangchain\b
   LangGraph:
-    - '\blanggraph\b'
+  - \blanggraph\b
   CrewAI:
-    - '\bcrewai\b'
+  - \bcrewai\b
   AutoGen:
-    - '\bautogen\b'
+  - \bautogen\b
   Dify:
-    - '\bdify\b'
+  - \bdify\b
   Airtable:
-    - '\bairtable\b'
+  - \bairtable\b
   Supabase:
-    - '\bsupabase\b'
+  - \bsupabase\b
   Pinecone:
-    - '\bpinecone\b'
+  - \bpinecone\b
   Weaviate:
-    - '\bweaviate\b'
+  - \bweaviate\b
   MCP:
-    - '\bmcp\b'
+  - \bmcp\b
   Python:
-    - '\bpython\b'
+  - \bpython\b
   CRM:
-    - '\bcrm\b'
+  - \bcrm\b
   RAG:
-    - '\brag\b'
+  - \brag\b
   OpenAI:
-    - '\bopenai\b'
+  - \bopenai\b
   Anthropic:
-    - '\banthropic\b'
+  - \banthropic\b
   Perplexity:
-    - '\bperplexity\b'
+  - \bperplexity\b
   OpenRouter:
-    - '\bopenrouter\b'
+  - \bopenrouter\b
   Groq:
-    - '\bgroq\b'
+  - \bgroq\b
   Mistral:
-    - '\bmistral\b'
+  - \bmistral\b
   Llama:
-    - '\bllama\b'
+  - \bllama\b
   DeepSeek:
-    - '\bdeepseek\b'
+  - \bdeepseek\b
   Manus:
-    - '\bmanus\b(?! script)'
+  - \bmanus\b(?! script)
   Devin:
-    - '\bdevin\b'
+  - \bdevin\b
   Replit:
-    - '\breplit\b'
+  - \breplit\b
   Bolt:
-    - '\bbolt\.new\b'
-    - '\bbolt ai\b'
+  - \bbolt\.new\b
+  - \bbolt ai\b
   Lovable:
-    - '\blovable\b'
+  - \blovable\b
   v0:
-    - '\bv0\b'
-    - '\bvercel v0\b'
+  - \bv0\b
+  - \bvercel v0\b
   Notion:
-    - '\bnotion\b'
+  - \bnotion\b
   Linear:
-    - '\blinear\b(?! regression)'
+  - \blinear\b(?! regression)
   Slack:
-    - '\bslack\b'
+  - \bslack\b
   Docker:
-    - '\bdocker\b'
+  - \bdocker\b
   Postgres:
-    - '\bpostgres\b'
-    - '\bpostgresql\b'
-
+  - \bpostgres\b
+  - \bpostgresql\b
 architectures:
   multi-agent:
-    - '\bmulti agent\b'
-    - '\bmulti-agent\b'
+  - \bmulti agent\b
+  - \bmulti-agent\b
   agentic:
-    - '\bagentic\b'
+  - \bagentic\b
   routing:
-    - '\brouting\b'
+  - \brouting\b
   orchestration:
-    - '\borchestration\b'
+  - \borchestration\b
   observability:
-    - '\bobservability\b'
+  - \bobservability\b
   evaluation:
-    - '\bevals?\b'
-    - '\bevaluation\b'
-    - '\bbenchmark\b'
+  - \bevals?\b
+  - \bevaluation\b
+  - \bbenchmark\b
   retrieval:
-    - '\bretrieval\b'
+  - \bretrieval\b
   fine-tuning:
-    - '\bfine-?tuning\b'
-    - '\bfine tuned?\b'
+  - \bfine-?tuning\b
+  - \bfine tuned?\b
   voice agents:
-    - '\bvoice agent\b'
-    - '\bspeech agent\b'
+  - \bvoice agent\b
+  - \bspeech agent\b
   computer use:
-    - '\bcomputer use\b'
+  - \bcomputer use\b
   prompt engineering:
-    - '\bprompt engineering\b'
-    - '\bprompt design\b'
+  - \bprompt engineering\b
+  - \bprompt design\b
   context window:
-    - '\bcontext window\b'
-    - '\blong context\b'
+  - \bcontext window\b
+  - \blong context\b
   tool calling:
-    - '\btool call(?:ing)?\b'
-    - '\bfunction call(?:ing)?\b'
+  - \btool call(?:ing)?\b
+  - \bfunction call(?:ing)?\b
   memory:
-    - '\bagent memory\b'
-    - '\blong.term memory\b'
-
+  - \bagent memory\b
+  - \blong.term memory\b
 use_cases:
   lead generation:
-    - '\blead gen(?:eration)?\b'
+  - \blead gen(?:eration)?\b
   customer support:
-    - '\bcustomer support\b'
+  - \bcustomer support\b
   sales automation:
-    - '\bsales automation\b'
+  - \bsales automation\b
   reliability audits:
-    - '\breliability audits?\b'
+  - \breliability audits?\b
   reporting:
-    - '\breporting\b'
-    - '\bdashboards?\b'
+  - \breporting\b
+  - \bdashboards?\b
   outreach:
-    - '\boutreach\b'
-    - '\bcold email\b'
+  - \boutreach\b
+  - \bcold email\b
   code generation:
-    - '\bcode gen(?:eration)?\b'
-    - '\bvibe coding\b'
+  - \bcode gen(?:eration)?\b
+  - \bvibe coding\b
   content creation:
-    - '\bcontent creation\b'
-    - '\bcontent workflow\b'
+  - \bcontent creation\b
+  - \bcontent workflow\b
   data extraction:
-    - '\bdata extract(?:ion)?\b'
-    - '\bscraping\b'
+  - \bdata extract(?:ion)?\b
+  - \bscraping\b
   document processing:
-    - '\bdocument processing\b'
-    - '\bpdf\s+(?:parsing|extraction|agent)\b'
+  - \bdocument processing\b
+  - \bpdf\s+(?:parsing|extraction|agent)\b
   research automation:
-    - '\bresearch automation\b'
-    - '\bdeep research\b'
+  - \bresearch automation\b
+  - \bdeep research\b
   coding assistant:
-    - '\bcoding assistant\b'
-    - '\bai coding\b'
-
+  - \bcoding assistant\b
+  - \bai coding\b
 business_models:
   agency:
-    - '\bagency\b'
+  - \bagency\b
   course:
-    - '\bcourse\b'
-    - '\bcohort\b'
-    - '\bcommunity\b'
-    - '\bworkshop\b'
+  - \bcourse\b
+  - \bcohort\b
+  - \bcommunity\b
+  - \bworkshop\b
   consulting:
-    - '\bconsulting\b'
+  - \bconsulting\b
   productised service:
-    - '\bproductised service\b'
-    - '\bproductized service\b'
+  - \bproductised service\b
+  - \bproductized service\b
   retainer:
-    - '\bretainer\b'
+  - \bretainer\b
   SaaS:
-    - '\bsaas\b'
+  - \bsaas\b
   newsletter:
-    - '\bnewsletter\b'
+  - \bnewsletter\b
   bootcamp:
-    - '\bbootcamp\b'
+  - \bbootcamp\b
   open source:
-    - '\bopen.source\b'
+  - \bopen.source\b
+emergent:
+  AGI:
+  - \bagi\b
+  SAS:
+  - \bsas\b
+  AIOS:
+  - \baios\b
+  ChatGPT:
+  - \bchatgpt\b
+  PayPal:
+  - \bpaypal\b
+  NVIDIA:
+  - \bnvidia\b
+  GLM:
+  - \bglm\b
+  GPT:
+  - \bgpt\b
