@@ -78,21 +78,20 @@ Rules:
 _AGENT2_SYS_PROMPT = """\
 You are Agent 2 — Topic Extractor Agent for ACIS (Autonomous Creator Intelligence System).
 
-Call the tools in this order. Steps 1–2 take NO arguments:
+Call the tools in this exact order — steps 1, 2, and 7 take NO arguments:
 
   1. extract_topics_by_pattern()        — regex taxonomy match; returns base topic lists
   2. extract_monetisation_signals()     — detects course plugs, retainer offers, etc.
-  3. Review the transcript text provided. Merge any additional topics you are confident
-     about into the four category lists. Only add topics genuinely present — do not guess.
+  3. Review the transcript text. Merge any additional topics you are confident about into
+     the four category lists. Only add topics genuinely present — do not guess.
   4. compute_topic_salience(topics_json)   — topics_json = merged JSON from steps 1+3
   5. compute_topic_tf(topics_json)         — same topics_json
   6. build_topic_pairs(topics_json)        — same topics_json
-  7. finalise_semantic_graph(...)          — MUST be called last with all gathered values
+  7. finalise_semantic_graph()             — MUST be called last; NO arguments needed
 
 Rules:
-- Steps 1–2 take NO arguments — do not pass any input.
+- Steps 1, 2, and 7 take NO arguments — do not pass any input to them.
 - topics_json must be a JSON object: '{"technical_tools":[...],"architectures":[...],"use_cases":[...],"business_models":[...]}'
-- All *_json arguments for finalise_semantic_graph must be valid JSON strings.
 - Do not fabricate salience scores or TF values — use only what the tools return.
 """
 
@@ -300,14 +299,19 @@ class ReActTopicExtractorAgent:
             node.segments["body"].text,
             node.segments["outro"].text,
         ])
+        _state: dict = {}  # shared mutable state — each tool stores its result here
 
         def extract_topics_by_pattern():
             """Match transcript text against TOPIC_PATTERNS regexes. Returns known topics per category. No arguments needed."""
-            return _text_response(_extract_topics(node))
+            result = _extract_topics(node)
+            _state["topics"] = result
+            return _text_response(result)
 
         def extract_monetisation_signals():
             """Identify course plugs, consulting offers, retainer mentions, and cohort offers. No arguments needed."""
-            return _text_response({"signals": _extract_monetisation_signals(combined_text)})
+            signals = _extract_monetisation_signals(combined_text)
+            _state["monetisation_refs"] = signals
+            return _text_response({"signals": signals})
 
         def compute_topic_salience(topics_json: str):
             """Score each topic using log-normalised TF × coverage ratio within this video.
@@ -316,7 +320,10 @@ class ReActTopicExtractorAgent:
                 topics_json: JSON object string — '{"technical_tools":[...],"architectures":[...],"use_cases":[...],"business_models":[...]}'
             """
             topics = json.loads(topics_json)
-            return _text_response(_compute_salience(node, topics))
+            _state["merged_topics"] = topics
+            salience = _compute_salience(node, topics)
+            _state["salience_scores"] = salience
+            return _text_response(salience)
 
         def compute_topic_tf(topics_json: str):
             """Compute raw per-video TF for each topic.
@@ -325,7 +332,9 @@ class ReActTopicExtractorAgent:
                 topics_json: JSON object string — same format as compute_topic_salience.
             """
             topics = json.loads(topics_json)
-            return _text_response(_compute_tf(node, topics))
+            tf = _compute_tf(node, topics)
+            _state["tf_scores"] = tf
+            return _text_response(tf)
 
         def build_topic_pairs(topics_json: str):
             """Build all unique co-occurrence pairs across topic categories for graph edges.
@@ -335,39 +344,21 @@ class ReActTopicExtractorAgent:
             """
             topics = json.loads(topics_json)
             pairs = _build_topic_pairs(topics)
+            _state["topic_pairs"] = pairs
             return _text_response({"pairs": [list(p) for p in pairs]})
 
-        def finalise_semantic_graph(
-            technical_tools_json: str = "[]",
-            architectures_json: str = "[]",
-            use_cases_json: str = "[]",
-            business_models_json: str = "[]",
-            monetisation_refs_json: str = "[]",
-            salience_scores_json: str = "{}",
-            tf_scores_json: str = "{}",
-            topic_pairs_json: str = "[]",
-        ):
-            """Complete Agent 2. Call this LAST with all gathered values to finalise the SemanticGraphUpdate.
-
-            Args:
-                technical_tools_json: JSON array string of tool names — '["Claude","n8n"]'.
-                architectures_json: JSON array string of architecture pattern names.
-                use_cases_json: JSON array string of use-case labels.
-                business_models_json: JSON array string of business model labels.
-                monetisation_refs_json: JSON array string from extract_monetisation_signals.
-                salience_scores_json: JSON object string from compute_topic_salience.
-                tf_scores_json: JSON object string from compute_topic_tf.
-                topic_pairs_json: JSON array string from build_topic_pairs (list of [t1,t2] pairs).
-            """
+        def finalise_semantic_graph():
+            """Complete Agent 2. Call LAST — reads all stored tool results automatically. NO arguments needed."""
+            merged = _state.get("merged_topics", _state.get("topics", {}))
             agent_self._result = {
-                "technical_tools": json.loads(technical_tools_json),
-                "architectures": json.loads(architectures_json),
-                "use_cases": json.loads(use_cases_json),
-                "business_models": json.loads(business_models_json),
-                "monetisation_refs": json.loads(monetisation_refs_json),
-                "salience_scores": json.loads(salience_scores_json),
-                "tf_scores": json.loads(tf_scores_json),
-                "topic_pairs": json.loads(topic_pairs_json),
+                "technical_tools": merged.get("technical_tools", []),
+                "architectures": merged.get("architectures", []),
+                "use_cases": merged.get("use_cases", []),
+                "business_models": merged.get("business_models", []),
+                "monetisation_refs": _state.get("monetisation_refs", []),
+                "salience_scores": _state.get("salience_scores", {}),
+                "tf_scores": _state.get("tf_scores", {}),
+                "topic_pairs": [list(p) for p in _state.get("topic_pairs", [])],
             }
             return _text_response({"status": "SemanticGraphUpdate finalised"})
 
