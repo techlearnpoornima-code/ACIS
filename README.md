@@ -96,11 +96,11 @@ flowchart TD
 | **Language** | Python 3.11+ · [uv](https://github.com/astral-sh/uv) | Runtime and package management |
 | **YouTube ingestion** | `google-api-python-client` | Search, video details, comments via Data API v3 |
 | **Transcript fetching** | `youtube-transcript-api` | Auto-generated caption retrieval with configurable rate-limiting |
-| **LLM agents** | AgentScope · Anthropic Claude API | ReActAgent loop for Agents 1–2 (`--agentscope` mode, `claude-sonnet-4-6`) |
+| **LLM agents** | AgentScope · Anthropic Claude API | Single Claude call per video for Agent 2 (`--agentscope` mode, `claude-sonnet-4-6`); Agent 1 always deterministic |
 | **NLP / analysis** | Python `re` · `math` · `collections` | Regex topic matching, TF scoring, hype score, Mann-Whitney U |
 | **Config / taxonomy** | PyYAML | YAML-driven topic taxonomy — add tools without touching code |
 | **Language detection** | `langdetect` | Transcript language identification |
-| **Database** | PostgreSQL · SQLAlchemy · psycopg2-binary | Video persistence, run history, deduplication |
+| **Database** | PostgreSQL · SQLAlchemy · psycopg2-binary | Video persistence, run history, deduplication, transcript cache |
 | **HTTP** | `requests` | Thumbnail downloads |
 | **Agent runtime** | Hermes Agent (NousResearch) | Persistent MEMORY.md belief store, FTS5 session search, cron scheduling, multi-platform delivery (Telegram/CLI) |
 | **Hermes bridge** | `src/acis/hermes_bridge.py` | `search_hermes_sessions()` (Agent 5) + `update_hermes_memory()` (Agent 6); falls back to local MEMORY.md when `HERMES_BASE_URL` is unset |
@@ -177,7 +177,7 @@ uv run python run.py --channel @liamottley --force-reprocess --memory output/mem
 | `--mode delta\|full` | `delta` | `delta` skips already-ingested videos; `full` reprocesses all |
 | `--output PATH` | `output/latest_run.json` | JSON output path |
 | `--transcript-delay N` | `1.5` | Seconds between transcript requests (increase if you hit 429s) |
-| `--agentscope` | off | Use AgentScope ReActAgent for Agents 1–2 (requires `ANTHROPIC_API_KEY`) |
+| `--agentscope` | off | Use a single Claude call per video to extend Agent 2's regex detections (requires `ANTHROPIC_API_KEY`); Agent 1 always deterministic |
 | `--model MODEL_ID` | `claude-sonnet-4-6` | Anthropic model for `--agentscope` mode |
 
 ---
@@ -214,11 +214,13 @@ The taxonomy covers 77 topics across four categories: `technical_tools`, `archit
 | Sample data | `python run.py --full` | None |
 | Live YouTube | `python run.py` | `YOUTUBE_API_KEY` |
 | Live + DB deduplication | `python run.py` + `DATABASE_URL` set | `YOUTUBE_API_KEY`, PostgreSQL |
-| AgentScope LLM | `python run.py --agentscope` | `ANTHROPIC_API_KEY` |
+| AgentScope LLM (single-shot) | `python run.py --agentscope` | `ANTHROPIC_API_KEY` |
 
 **Transcript fetching:** The pipeline uses `youtube-transcript-api` to fetch auto-generated captions. A configurable delay (`--transcript-delay`, default 1.5 s) paces requests to stay under YouTube's rate limit. Videos where transcripts are unavailable are still processed using title, description, and comments.
 
 **Deduplication:** On live runs the pipeline loads all previously ingested `video_id`s from PostgreSQL and skips them. Use `--force-reprocess` to bypass this.
+
+**Transcript cache:** Raw transcript segments are stored in the `transcript_cache` table after the first fetch. On subsequent runs — including `--force-reprocess` — transcripts are served from the cache and the YouTube API is not called. For videos processed before the cache existed, the pipeline falls back to the `transcripts` table (stored hook/body/outro text) automatically.
 
 ---
 
@@ -230,6 +232,7 @@ psql $DATABASE_URL -f migrations/001_init.sql
 psql $DATABASE_URL -f migrations/002_topic_tf.sql
 psql $DATABASE_URL -f migrations/003_phase2.sql
 psql $DATABASE_URL -f migrations/004_phase3.sql
+psql $DATABASE_URL -f migrations/005_transcript_cache.sql
 ```
 
 ---

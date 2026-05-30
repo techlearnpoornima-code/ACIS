@@ -1028,7 +1028,8 @@ uv run python run.py --agentscope                  # LLM agents for A1+A2
 | `channels` | Ingestion | `channel_id`, `handle` |
 | `runs` | Every run | `run_id`, `started_at`, `status` |
 | `videos` | Ingestion | `video_id`, `upload_date`, `view_count`, `duration_seconds` |
-| `transcripts` | Ingestion | `video_id`, `source`, `segment_count` |
+| `transcripts` | Ingestion | `video_id`, `hook_text`, `body_text`, `outro_text`, `source` |
+| `transcript_cache` | Ingestion | `video_id`, `segments_json` (raw), `source`, `fetched_at` |
 | `video_comments` | Ingestion | `video_id`, `like_count` |
 | `agent_outputs` | Pipeline | `video_id`, `agent_id`, `output_json` |
 | `topic_tf` | Agent 2 | `video_id`, `topic`, `tf_score` |
@@ -1041,106 +1042,72 @@ uv run python run.py --agentscope                  # LLM agents for A1+A2
 
 **Deduplication:** On live runs, the pipeline loads all existing `video_id`s from the `videos` table before fetching from YouTube. Any already-ingested video is skipped and counted in `videos_skipped`. Use `--force-reprocess` to bypass this.
 
+**Transcript cache (`transcript_cache` table):** Raw transcript segments (`[{start, duration, text}]`) are stored as JSONB after the first YouTube fetch. On all subsequent runs — including `--force-reprocess` — transcripts are served from this table and the YouTube API is never called again for that video. For videos processed before this table existed, `get_cached_transcript()` falls back to reconstructing three pseudo-segments from the `transcripts` table (hook/body/outro text) so existing data is also reused without a network call.
+
 ---
 
 ## 10. AgentScope Integration
 
 ### Why AgentScope?
 
-The deterministic agents (Agents 1–3) follow fixed code paths: segment transcript, match regex patterns, score salience. This is fast and reproducible but cannot adapt to ambiguous transcripts or make judgment calls the programmer didn't anticipate.
+The deterministic agents (Agents 1–3) follow fixed code paths: segment transcript, match regex patterns, score salience. This is fast and reproducible but cannot recognise tool names the regex taxonomy hasn't seen yet.
 
-AgentScope's `ReActAgent` replaces Agents 1 and 2 with an LLM reasoning loop. The model is given the same toolkit functions the deterministic agents call internally, but it decides the order and parameters — and can supplement regex pattern matching with its own world knowledge (e.g. noticing a new tool name that doesn't yet match any pattern).
+AgentScope's integration adds **one Claude API call per video** in Agent 2 to extend the regex baseline with topics the LLM recognises from its world knowledge. Agent 1 remains fully deterministic — transcript segmentation and language detection are algorithmic operations that gain nothing from LLM reasoning.
 
 **Activate with:** `python run.py --agentscope` (requires `ANTHROPIC_API_KEY` and `pip install 'acis[agents]'`)
 
-### ReActAgent mode vs. deterministic pipeline
+### Single-shot mode vs. deterministic pipeline
 
 ```
 Deterministic mode (default):
-  IngestionPayload → Channel Researcher (fixed code) → ChannelResearchNode
-  ChannelResearchNode → Topic Extractor (regex match) → SemanticGraphUpdate
+  IngestionPayload → ChannelResearchAgent (fixed code)   → ChannelResearchNode
+  ChannelResearchNode → TopicExtractorAgent (regex only) → SemanticGraphUpdate
+  API calls per video: 0
 
 AgentScope mode (--agentscope):
-  IngestionPayload → ReActChannelResearchAgent (LLM + tools) → ChannelResearchNode
-  ChannelResearchNode → ReActTopicExtractorAgent (LLM + tools + own knowledge) → SemanticGraphUpdate
+  IngestionPayload → ChannelResearchAgent (fixed code)         → ChannelResearchNode
+  ChannelResearchNode → SingleShotTopicExtractorAgent (1 call) → SemanticGraphUpdate
+  API calls per video: 1
 ```
 
 In both modes the output types are identical. Agents 3–6 always run deterministically regardless of mode.
 
-**The ReAct loop:**
+### How SingleShotTopicExtractorAgent works
+
+**File:** `src/acis/agents/agentscope.py` — `SingleShotTopicExtractorAgent`  
+**Model:** `claude-sonnet-4-6` via `anthropic.Anthropic().messages.create()`  
+**API calls:** 1 per video
 
 ```
-User Msg (video payload JSON)
-  │
-  ▼
-LLM ── reasons ──▶ decides which tool to call
-  │
-  ├── tool call ──▶ tool executes ──▶ ToolResponse → back to LLM
-  ├── tool call ──▶ ...
-  └── finalise_research() / finalise_semantic_graph()   ← mandatory last call
-         │
-         ▼
-    _result dict written ──▶ ChannelResearchNode / SemanticGraphUpdate constructed
+1. Run TopicExtractorAgent deterministically → baseline topics
+2. Send ONE prompt to Claude:
+     - title + transcript (first 4000 chars)
+     - baseline topics already found by regex
+     - "add anything genuinely present that regex missed"
+3. Parse JSON response → extract additions per category
+4. Merge additions into baseline (deduplicated, case-insensitive)
+5. Recompute salience, TF, and topic pairs on merged set
 ```
 
-The loop runs for up to `max_iters` turns (8 for Agent 1, 12 for Agent 2). If the LLM does not call the finalise tool within the limit, the agent **falls back to the deterministic implementation** and prints a warning — the run always completes.
+**Why not a ReAct loop?** A ReAct loop makes one API call per tool call — for a fixed deterministic sequence that was 11 calls per video. Since the tool order is always the same, a single prompt with the full transcript delivers the same result at 1/11th the cost and without rate-limit pressure.
 
-### Agent 1 toolkit
-
-**File:** `src/acis/agents/agentscope.py` — `ReActChannelResearchAgent`  
-**Model:** `AnthropicChatModel` (`claude-sonnet-4-6`)  
-**Max iterations:** 8
-
-| Tool | What the LLM calls it for |
-|---|---|
-| `segment_transcript(segments_json, duration_seconds)` | Split transcript into hook / body / outro windows |
-| `detect_language(text)` | Get ISO 639-1 language code for the transcript |
-| `count_words(text)` | Total word count of full transcript |
-| `get_transcript_completeness(segments_json, duration_seconds)` | Fraction of video duration covered by captions |
-| `finalise_research(...)` | **Must be called last** — writes all values into `_result`; LLM provides completeness, language, word count, wpm, and all three window texts |
-
-The system prompt instructs the LLM to call tools in this exact order and pass real tool outputs into `finalise_research` — it must not fabricate values.
-
-### Agent 2 toolkit
-
-**File:** `src/acis/agents/agentscope.py` — `ReActTopicExtractorAgent`  
-**Model:** `AnthropicChatModel` (`claude-sonnet-4-6`)  
-**Max iterations:** 12 (more tool calls needed than Agent 1)
-
-| Tool | What the LLM calls it for |
-|---|---|
-| `extract_topics_by_pattern(research_node_json)` | Regex-match all 77 taxonomy topics against the video text |
-| `extract_monetisation_signals(text)` | Detect course plugs, consulting offers, retainer mentions |
-| `compute_topic_salience(research_node_json, topics_json)` | Score each topic: log-TF × coverage |
-| `compute_topic_tf(research_node_json, topics_json)` | Raw TF per topic for future IDF |
-| `build_topic_pairs(topics_json)` | Generate co-occurrence pairs across categories |
-| `finalise_semantic_graph(...)` | **Must be called last** — all category lists, scores, and pairs |
-
-**Key difference from Agent 1:** After `extract_topics_by_pattern`, the system prompt asks the LLM to review the hook/body/outro text directly and **add any topics it is confident about** that the regex missed. This is where the LLM's world knowledge fills gaps the static taxonomy doesn't cover — without hallucinating (the prompt instructs "only add topics genuinely present").
-
-### Fallback behaviour
-
-Both ReAct agents implement `_fallback()`:
+**Fallback:** Any API or JSON parse error silently returns the deterministic baseline — the run always completes.
 
 ```python
-def _fallback(self, payload: IngestionPayload) -> ChannelResearchNode:
-    from acis.agents.channel_researcher import ChannelResearchAgent
-    return ChannelResearchAgent(agent_id=self.agent_id).run(payload)
+# Console output when LLM adds topics:
+✓ abc123: Agent 2 LLM added 2 topic(s) to baseline
 ```
-
-If the LLM fails to call `finalise_*` within `max_iters`, or raises any exception, the fallback runs the standard deterministic agent on the same input and the pipeline continues. This guarantees the run always produces output.
 
 ### Initialisation
 
 ```python
-from acis.agents.agentscope import init_agentscope, ReActChannelResearchAgent, ReActTopicExtractorAgent
+from acis.agents.agentscope import init_agentscope, SingleShotTopicExtractorAgent
 
-model = init_agentscope(model_name="claude-sonnet-4-6", api_key="sk-ant-...")
-agent1 = ReActChannelResearchAgent(model=model)
-agent2 = ReActTopicExtractorAgent(model=model)
+model_config = init_agentscope(model_name="claude-sonnet-4-6", api_key="sk-ant-...")
+agent2 = SingleShotTopicExtractorAgent(**model_config)
 ```
 
-`init_agentscope()` calls `agentscope.init(project="acis")` and returns a shared `AnthropicChatModel` instance. Both agents share the same model object — AgentScope handles thread safety internally.
+`init_agentscope()` calls `agentscope.init(project="acis")` and returns `{"model_name": ..., "api_key": ...}`. The agent calls `anthropic.Anthropic()` directly — no AgentScope model wrapper in the hot path.
 
 ---
 
